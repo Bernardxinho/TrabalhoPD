@@ -33,14 +33,23 @@ public class Main {
     }
 
     private static void processarMensagem(DatagramSocket socket, String mensagem, InetAddress ip, int porto) {
+        int portoTCP = -1;
+        try {
+            if (mensagem.startsWith("REGISTO:") || mensagem.startsWith("HEARTBEAT:")) {
+                portoTCP = Integer.parseInt(mensagem.split(":")[1]);
+            }
+        } catch (Exception ignored) {}
+
+        int portoChave = (portoTCP > -1) ? portoTCP : porto;
+
         Optional<ServidorInfo> existente = servidoresAtivos.stream()
-                .filter(s -> s.getIp().equals(ip) && s.getPorto() == porto)
+                .filter(s -> s.getIp().equals(ip) && s.getPorto() == portoChave)
                 .findFirst();
 
         try {
-            if (mensagem.equals("PEDIDO_REGISTO_SERVIDOR")) {
+            if (mensagem.equals("PEDIDO_REGISTO_SERVIDOR") || mensagem.startsWith("REGISTO:")) {
                 if (existente.isEmpty()) {
-                    ServidorInfo novo = new ServidorInfo(ip, porto);
+                    ServidorInfo novo = new ServidorInfo(ip, portoChave); // guarda porto TCP quando existe
                     servidoresAtivos.add(novo);
                     System.out.println("[Diretoria] Novo servidor registado: " + novo);
                 } else {
@@ -50,10 +59,11 @@ public class Main {
                 enviar(socket, ip, porto, "Registo recebido com sucesso!");
             }
 
-            else if (mensagem.equals("HEARTBEAT")) {
+            else if (mensagem.equals("HEARTBEAT") || mensagem.startsWith("HEARTBEAT:")) {
                 existente.ifPresent(s -> {
                     s.atualizarHeartbeat();
-                    System.out.println("[Diretoria] Heartbeat recebido de " + ip.getHostAddress() + ":" + porto);
+                    System.out.println("[Diretoria] Heartbeat recebido de " +
+                            ip.getHostAddress() + ":" + portoChave);
                 });
                 enviar(socket, ip, porto, "ACK_HEARTBEAT");
             }
@@ -62,8 +72,9 @@ public class Main {
                 if (servidoresAtivos.isEmpty()) {
                     enviar(socket, ip, porto, "ERRO: Nenhum servidor ativo!");
                 } else {
-                    ServidorInfo principal = servidoresAtivos.get(0); 
-                    String respostaCliente = principal.getIp().getHostAddress() + ":" + principal.getPorto();
+                    ServidorInfo principal = servidoresAtivos.get(0);
+                    String respostaCliente =
+                            principal.getIp().getHostAddress() + ":" + principal.getPorto();
                     enviar(socket, ip, porto, respostaCliente);
                     System.out.println("[Diretoria] Enviou ao cliente o servidor principal: " + respostaCliente);
                 }

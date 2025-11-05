@@ -13,7 +13,8 @@ public class Main {
             int portoDiretoria = 4000;
             DatagramSocket socket = new DatagramSocket();
 
-            String mensagem = "PEDIDO_REGISTO_SERVIDOR";
+            int portoTCP = 5050;
+            String mensagem = "REGISTO:" + portoTCP;
             byte[] dados = mensagem.getBytes();
             InetAddress ip = InetAddress.getByName(ipDiretoria);
             DatagramPacket packet = new DatagramPacket(dados, dados.length, ip, portoDiretoria);
@@ -29,8 +30,8 @@ public class Main {
             new Thread(() -> {
                 try (DatagramSocket hbSocket = new DatagramSocket()) {
                     while (true) {
-                        Thread.sleep(5000); 
-                        String hbMsg = "HEARTBEAT";
+                        Thread.sleep(5000);
+                        String hbMsg = "HEARTBEAT:" + portoTCP;
                         byte[] hbBytes = hbMsg.getBytes();
                         DatagramPacket hbPacket = new DatagramPacket(hbBytes, hbBytes.length, ip, portoDiretoria);
                         hbSocket.send(hbPacket);

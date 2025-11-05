@@ -39,7 +39,7 @@ public class Main {
             BufferedReader input = new BufferedReader(new InputStreamReader(socketTCP.getInputStream()));
             PrintWriter output = new PrintWriter(socketTCP.getOutputStream(), true);
 
-            output.println("Olá servidor! Sou o cliente 😎");
+            output.println("Olá servidor! Sou o cliente");
             String respostaServidor = input.readLine();
             System.out.println("[Cliente] Servidor respondeu: " + respostaServidor);
 
