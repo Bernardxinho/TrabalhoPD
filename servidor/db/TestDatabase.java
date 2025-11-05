@@ -14,7 +14,7 @@ public class TestDatabase {
         System.out.println("\n--- Informações da BD ---");
         System.out.println("Versão: " + db.getVersao());
 
-        // Testar inserção de dados de exemplo
+     
         try {
             insertDadosTeste(db);
             listarTabelasComDados(db);
@@ -30,7 +30,6 @@ public class TestDatabase {
     private static void insertDadosTeste(DatabaseManager db) throws SQLException {
         Connection conn = db.getConnection();
 
-        // Inserir um docente de teste
         String hashDocente = DatabaseManager.hashPassword("senha123");
         PreparedStatement ps = conn.prepareStatement(
                 "INSERT OR IGNORE INTO Docente (nome, email, password_hash) VALUES (?, ?, ?)"
@@ -41,7 +40,6 @@ public class TestDatabase {
         ps.executeUpdate();
         ps.close();
 
-        // Inserir um estudante de teste
         String hashEstudante = DatabaseManager.hashPassword("senha456");
         ps = conn.prepareStatement(
                 "INSERT OR IGNORE INTO Estudante (numero, nome, email, password_hash) VALUES (?, ?, ?, ?)"
@@ -53,13 +51,11 @@ public class TestDatabase {
         ps.executeUpdate();
         ps.close();
 
-        // Buscar ID do docente
         Statement stmt = conn.createStatement();
         ResultSet rs = stmt.executeQuery("SELECT id FROM Docente WHERE email = 'joao.silva@isec.pt'");
         int docenteId = rs.getInt("id");
         rs.close();
 
-        // Inserir uma pergunta de teste
         String codigoAcesso = DatabaseManager.gerarCodigoAcesso();
         ps = conn.prepareStatement(
                 "INSERT OR IGNORE INTO Pergunta (enunciado, data_inicio, data_fim, codigo_acesso, docente_id) " +
@@ -71,12 +67,10 @@ public class TestDatabase {
         ps.executeUpdate();
         ps.close();
 
-        // Buscar ID da pergunta
         rs = stmt.executeQuery("SELECT id FROM Pergunta WHERE codigo_acesso = '" + codigoAcesso + "'");
         int perguntaId = rs.getInt("id");
         rs.close();
 
-        // Inserir opções
         ps = conn.prepareStatement(
                 "INSERT OR IGNORE INTO Opcao (pergunta_id, letra, texto, is_correta) VALUES (?, ?, ?, ?)"
         );
@@ -84,7 +78,7 @@ public class TestDatabase {
         ps.setInt(1, perguntaId);
         ps.setString(2, "a");
         ps.setString(3, "Lisboa");
-        ps.setInt(4, 1); // Correta
+        ps.setInt(4, 1); 
         ps.executeUpdate();
 
         ps.setInt(1, perguntaId);

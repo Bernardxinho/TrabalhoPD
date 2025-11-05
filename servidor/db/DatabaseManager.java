@@ -23,12 +23,9 @@ public class DatabaseManager {
         }
     }
 
-    /**
-     * Cria todas as tabelas necessárias para o sistema
-     */
+  
     public void createTables() {
         try {
-            // Tabela de Configuração (versão da BD e código de registo dos docentes)
             String configuracao = """
                 CREATE TABLE IF NOT EXISTS Configuracao (
                     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -37,7 +34,6 @@ public class DatabaseManager {
                 );
                 """;
 
-            // Tabela de Docentes
             String docentes = """
                 CREATE TABLE IF NOT EXISTS Docente (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,7 +44,6 @@ public class DatabaseManager {
                 );
                 """;
 
-            // Tabela de Estudantes
             String estudantes = """
                 CREATE TABLE IF NOT EXISTS Estudante (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,7 +55,6 @@ public class DatabaseManager {
                 );
                 """;
 
-            // Tabela de Perguntas
             String perguntas = """
                 CREATE TABLE IF NOT EXISTS Pergunta (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,7 +68,6 @@ public class DatabaseManager {
                 );
                 """;
 
-            // Tabela de Opções
             String opcoes = """
                 CREATE TABLE IF NOT EXISTS Opcao (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,7 +80,6 @@ public class DatabaseManager {
                 );
                 """;
 
-            // Tabela de Respostas
             String respostas = """
                 CREATE TABLE IF NOT EXISTS Resposta (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -110,11 +102,9 @@ public class DatabaseManager {
             stmt.execute(opcoes);
             stmt.execute(respostas);
 
-            // Inserir configuração inicial se não existir
             String checkConfig = "SELECT COUNT(*) FROM Configuracao";
             ResultSet rs = stmt.executeQuery(checkConfig);
             if (rs.next() && rs.getInt(1) == 0) {
-                // Hash de um código exemplo "DOCENTE2025" (deve ser alterado!)
                 String codigoHash = hashPassword("DOCENTE2025");
                 String insertConfig = "INSERT INTO Configuracao (id, versao, codigo_registo_docentes) VALUES (1, 0, ?)";
                 PreparedStatement pstmt = connection.prepareStatement(insertConfig);
@@ -133,9 +123,7 @@ public class DatabaseManager {
         }
     }
 
-    /**
-     * Obtém a versão atual da base de dados
-     */
+    
     public int getVersao() {
         try {
             Statement stmt = connection.createStatement();
@@ -152,9 +140,7 @@ public class DatabaseManager {
         return 0;
     }
 
-    /**
-     * Incrementa a versão da base de dados
-     */
+ 
     public void incrementarVersao() {
         try {
             Statement stmt = connection.createStatement();
@@ -166,9 +152,7 @@ public class DatabaseManager {
         }
     }
 
-    /**
-     * Hash simples de password usando SHA-256
-     */
+  
     public static String hashPassword(String password) {
         try {
             java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
@@ -186,9 +170,7 @@ public class DatabaseManager {
         }
     }
 
-    /**
-     * Gera um código de acesso aleatório para uma pergunta
-     */
+ 
     public static String gerarCodigoAcesso() {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         StringBuilder codigo = new StringBuilder();
