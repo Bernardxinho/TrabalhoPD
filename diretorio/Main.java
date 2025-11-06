@@ -3,17 +3,30 @@ package diretorio;
 import java.net.*;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class Main {
     private static final int PORTO_DIRETORIA = 4000;
-    private static final List<ServidorInfo> servidoresAtivos = Collections.synchronizedList(new ArrayList<>());
+    private static final List<ServidorInfo> servidoresAtivos =
+            Collections.synchronizedList(new ArrayList<>());
+
+    private static final boolean VERBOSE_HB = true; // true  -> mostra cada heartbeat (~5s), false -> mostra apenas resumo por minuto
+
+    private static final DateTimeFormatter FMT_HHMMSS =
+            DateTimeFormatter.ofPattern("HH:mm:ss");
+
+    private static volatile long hbCount = 0;
 
     public static void main(String[] args) {
         try (DatagramSocket socket = new DatagramSocket(PORTO_DIRETORIA)) {
             System.out.println("[Diretoria] Servidor de diretoria a correr no porto " + PORTO_DIRETORIA);
 
-            new Thread(() -> verificarInatividade()).start();
+            new Thread(Main::verificarInatividade, "PD-Check-Inativos").start();
+
+            if (!VERBOSE_HB) {
+                new Thread(Main::resumoPeriodico, "PD-Resumo-60s").start();
+            }
 
             byte[] buffer = new byte[1024];
             while (true) {
@@ -36,11 +49,11 @@ public class Main {
         int portoTCP = -1;
         try {
             if (mensagem.startsWith("REGISTO:") || mensagem.startsWith("HEARTBEAT:")) {
-                portoTCP = Integer.parseInt(mensagem.split(":")[1]);
+                portoTCP = Integer.parseInt(mensagem.split(":", 2)[1]);
             }
         } catch (Exception ignored) {}
 
-        int portoChave = (portoTCP > -1) ? portoTCP : porto;
+        final int portoChave = (portoTCP > -1) ? portoTCP : porto;
 
         Optional<ServidorInfo> existente = servidoresAtivos.stream()
                 .filter(s -> s.getIp().equals(ip) && s.getPorto() == portoChave)
@@ -49,22 +62,39 @@ public class Main {
         try {
             if (mensagem.equals("PEDIDO_REGISTO_SERVIDOR") || mensagem.startsWith("REGISTO:")) {
                 if (existente.isEmpty()) {
-                    ServidorInfo novo = new ServidorInfo(ip, portoChave); // guarda porto TCP quando existe
+                    ServidorInfo novo = new ServidorInfo(ip, portoChave);
                     servidoresAtivos.add(novo);
-                    System.out.println("[Diretoria] Novo servidor registado: " + novo);
+                    System.out.println("[Diretoria] Novo servidor registado: " + novo.getIp().getHostAddress() + ":" + novo.getPorto()
+                            + " (último heartbeat: " + novo.getUltimaAtualizacao().format(FMT_HHMMSS) + ")");
+                    mostrarServidores();
                 } else {
                     existente.get().atualizarHeartbeat();
-                    System.out.println("[Diretoria] Servidor já registado, heartbeat atualizado.");
+                    if (VERBOSE_HB) {
+                        System.out.println("[Diretoria] Servidor já registado, heartbeat atualizado: "
+                                + ip.getHostAddress() + ":" + portoChave
+                                + " (lastSeen=" + existente.get().getUltimaAtualizacao().format(FMT_HHMMSS) + ")");
+                    }
                 }
                 enviar(socket, ip, porto, "Registo recebido com sucesso!");
             }
 
             else if (mensagem.equals("HEARTBEAT") || mensagem.startsWith("HEARTBEAT:")) {
-                existente.ifPresent(s -> {
+                existente.ifPresentOrElse(s -> {
                     s.atualizarHeartbeat();
-                    System.out.println("[Diretoria] Heartbeat recebido de " +
-                            ip.getHostAddress() + ":" + portoChave);
+                    hbCount++;
+
+                    if (VERBOSE_HB) {
+                        System.out.println("[Diretoria] Heartbeat recebido de "
+                                + ip.getHostAddress() + ":" + portoChave
+                                + " (lastSeen=" + s.getUltimaAtualizacao().format(FMT_HHMMSS) + ")");
+                    }
+                }, () -> {
+                    if (VERBOSE_HB) {
+                        System.out.println("[Diretoria] ⚠ HEARTBEAT de servidor NÃO REGISTADO: "
+                                + ip.getHostAddress() + ":" + portoChave);
+                    }
                 });
+
                 enviar(socket, ip, porto, "ACK_HEARTBEAT");
             }
 
@@ -73,8 +103,7 @@ public class Main {
                     enviar(socket, ip, porto, "ERRO: Nenhum servidor ativo!");
                 } else {
                     ServidorInfo principal = servidoresAtivos.get(0);
-                    String respostaCliente =
-                            principal.getIp().getHostAddress() + ":" + principal.getPorto();
+                    String respostaCliente = principal.getIp().getHostAddress() + ":" + principal.getPorto();
                     enviar(socket, ip, porto, respostaCliente);
                     System.out.println("[Diretoria] Enviou ao cliente o servidor principal: " + respostaCliente);
                 }
@@ -83,10 +112,7 @@ public class Main {
         } catch (Exception e) {
             System.err.println("[Diretoria] Erro ao processar mensagem: " + e.getMessage());
         }
-
-        mostrarServidores();
     }
-
 
     private static void enviar(DatagramSocket socket, InetAddress ip, int porto, String msg) throws Exception {
         byte[] respostaBytes = msg.getBytes();
@@ -97,8 +123,11 @@ public class Main {
     private static void mostrarServidores() {
         System.out.println("\n[Diretoria] Servidores ativos (" + servidoresAtivos.size() + "):");
         synchronized (servidoresAtivos) {
-            for (ServidorInfo s : servidoresAtivos)
-                System.out.println("   - " + s);
+            for (ServidorInfo s : servidoresAtivos) {
+                String hora = s.getUltimaAtualizacao().format(FMT_HHMMSS);
+                System.out.println("   - " + s.getIp().getHostAddress() + ":" + s.getPorto()
+                        + " (último heartbeat: " + hora + ")");
+            }
         }
         System.out.println("---------------------------------------");
     }
@@ -106,19 +135,58 @@ public class Main {
     private static void verificarInatividade() {
         while (true) {
             try {
-                Thread.sleep(5000); 
+                Thread.sleep(5000); // verifica a cada 5s
+                boolean mudou = false;
+
                 synchronized (servidoresAtivos) {
-                    servidoresAtivos.removeIf(s -> {
+                    Iterator<ServidorInfo> it = servidoresAtivos.iterator();
+                    while (it.hasNext()) {
+                        ServidorInfo s = it.next();
                         Duration tempo = Duration.between(s.getUltimaAtualizacao(), LocalDateTime.now());
                         if (tempo.getSeconds() > 17) {
-                            System.out.println("[Diretoria] ❌ Servidor removido por inatividade: " + s);
-                            return true;
+                            System.out.println("[Diretoria] Servidor removido por inatividade: "
+                                    + s.getIp().getHostAddress() + ":" + s.getPorto()
+                                    + " (lastSeen=" + s.getUltimaAtualizacao().format(FMT_HHMMSS) + ")");
+                            it.remove();
+                            mudou = true;
                         }
-                        return false;
-                    });
+                    }
                 }
+
+                if (mudou) {
+                    mostrarServidores();
+                }
+
             } catch (Exception e) {
                 System.err.println("[Diretoria] Erro ao verificar inatividade: " + e.getMessage());
+            }
+        }
+    }
+
+    // VERBOSE_HB=false
+    private static void resumoPeriodico() {
+        while (true) {
+            try {
+                Thread.sleep(60_000); //1 minuto
+                ServidorInfo principal;
+                int ativos;
+
+                synchronized (servidoresAtivos) {
+                    ativos = servidoresAtivos.size();
+                    principal = ativos == 0 ? null : servidoresAtivos.get(0);
+                }
+
+                String linha = (principal == null)
+                        ? "[Diretoria] Resumo: 0 servidores ativos | HB/min=" + hbCount
+                        : "[Diretoria] Resumo: " + ativos + " ativos | Principal: "
+                        + principal.getIp().getHostAddress() + ":" + principal.getPorto()
+                        + " | HB/min=" + hbCount;
+
+                System.out.println(linha);
+                hbCount = 0;
+            } catch (InterruptedException ignore) { }
+            catch (Exception e) {
+                System.err.println("[Diretoria] Erro no resumo: " + e.getMessage());
             }
         }
     }
