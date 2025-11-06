@@ -23,7 +23,6 @@ public class DatabaseManager {
         }
     }
 
-  
     public void createTables() {
         try {
             String configuracao = """

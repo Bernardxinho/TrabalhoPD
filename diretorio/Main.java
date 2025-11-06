@@ -12,7 +12,6 @@ public class Main {
             Collections.synchronizedList(new ArrayList<>());
 
     private static final boolean VERBOSE_HB = true; // true  -> mostra cada heartbeat (~5s), false -> mostra apenas resumo por minuto
-
     private static final DateTimeFormatter FMT_HHMMSS =
             DateTimeFormatter.ofPattern("HH:mm:ss");
 
@@ -123,10 +122,12 @@ public class Main {
     private static void mostrarServidores() {
         System.out.println("\n[Diretoria] Servidores ativos (" + servidoresAtivos.size() + "):");
         synchronized (servidoresAtivos) {
-            for (ServidorInfo s : servidoresAtivos) {
+            for (int i = 0; i < servidoresAtivos.size(); i++) {
+                ServidorInfo s = servidoresAtivos.get(i);
+                String papel = (i == 0 ? " (PRINCIPAL)" : "");
                 String hora = s.getUltimaAtualizacao().format(FMT_HHMMSS);
                 System.out.println("   - " + s.getIp().getHostAddress() + ":" + s.getPorto()
-                        + " (último heartbeat: " + hora + ")");
+                        + papel + " (último heartbeat: " + hora + ")");
             }
         }
         System.out.println("---------------------------------------");
@@ -154,6 +155,11 @@ public class Main {
                 }
 
                 if (mudou) {
+                    if (!servidoresAtivos.isEmpty()) {
+                        ServidorInfo novoPrincipal = servidoresAtivos.get(0);
+                        System.out.println("[Diretoria] 🟢 Novo servidor principal: "
+                                + novoPrincipal.getIp().getHostAddress() + ":" + novoPrincipal.getPorto());
+                    }
                     mostrarServidores();
                 }
 

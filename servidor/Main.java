@@ -11,12 +11,19 @@ public class Main {
         try {
             String ipDiretoria = "127.0.0.1";
             int portoDiretoria = 4000;
+            InetAddress ip = InetAddress.getByName(ipDiretoria);
             DatagramSocket socket = new DatagramSocket();
 
-            int portoTCP = 5050;
-            String mensagem = "REGISTO:" + portoTCP;
+            ServerSocket servidorClientes = new ServerSocket(0);
+            int portoTCP = servidorClientes.getLocalPort();
+
+            ServerSocket servidorSync = new ServerSocket(0);
+            int portoSync = servidorSync.getLocalPort();
+
+            System.out.println("[Servidor] Portos TCP atribuídos -> Clientes: " + portoTCP + " | Sync: " + portoSync);
+
+            String mensagem = "REGISTO:" + portoTCP + ":" + portoSync;
             byte[] dados = mensagem.getBytes();
-            InetAddress ip = InetAddress.getByName(ipDiretoria);
             DatagramPacket packet = new DatagramPacket(dados, dados.length, ip, portoDiretoria);
             socket.send(packet);
             System.out.println("[Servidor] Pedido de registo enviado para diretoria.");
@@ -28,25 +35,48 @@ public class Main {
             System.out.println("[Servidor] Resposta da diretoria: " + resposta);
 
             new Thread(() -> {
-                try (DatagramSocket hbSocket = new DatagramSocket()) {
+                try {
                     while (true) {
                         Thread.sleep(5000);
-                        String hbMsg = "HEARTBEAT:" + portoTCP;
+                        String hbMsg = "HEARTBEAT:" + portoTCP + ":" + portoSync;
                         byte[] hbBytes = hbMsg.getBytes();
                         DatagramPacket hbPacket = new DatagramPacket(hbBytes, hbBytes.length, ip, portoDiretoria);
-                        hbSocket.send(hbPacket);
+                        socket.send(hbPacket);
                         System.out.println("[Servidor] Heartbeat enviado.");
                     }
                 } catch (Exception e) {
                     System.err.println("[Servidor] Erro no heartbeat: " + e.getMessage());
                 }
-            }).start();
+            }, "HB-Thread").start();
+
+            new Thread(() -> {
+                try {
+                    System.out.println("[Servidor] À escuta de clientes em TCP no porto " + portoTCP);
+
+                    while (true) {
+                        Socket cliente = servidorClientes.accept();
+                        System.out.println("[Servidor] Cliente conectado: " + cliente.getInetAddress().getHostAddress());
+
+                        java.io.BufferedReader in = new java.io.BufferedReader(
+                                new java.io.InputStreamReader(cliente.getInputStream()));
+                        java.io.PrintWriter out = new java.io.PrintWriter(cliente.getOutputStream(), true);
+
+                        String msg = in.readLine();
+                        System.out.println("[Servidor] Recebido do cliente: " + msg);
+
+                        out.println("Olá cliente! Servidor recebeu: " + msg);
+                        cliente.close();
+                    }
+                } catch (Exception e) {
+                    System.err.println("[Servidor] Erro TCP: " + e.getMessage());
+                }
+            }, "TCP-Clientes").start();
 
         } catch (Exception e) {
-            System.err.println("[Servidor] Erro UDP: " + e.getMessage());
+            System.err.println("[Servidor] Erro UDP/TCP inicial: " + e.getMessage());
         }
 
-        DatabaseManager db = new DatabaseManager(dbPath);
+        DatabaseManager db = new DatabaseManager("servidor/sistema.db");
         db.connect();
         db.createTables();
 
@@ -74,31 +104,6 @@ public class Main {
             System.err.println("[DB] Erro ao inserir docente de teste: " + e.getMessage());
         }
 
-        new Thread(() -> {
-            try {
-                int portoTCP = 5050;
-                ServerSocket serverSocket = new ServerSocket(portoTCP);
-                System.out.println("[Servidor] À escuta de clientes em TCP no porto " + portoTCP);
-
-                while (true) {
-                    Socket cliente = serverSocket.accept();
-                    System.out.println("[Servidor] Cliente conectado: " + cliente.getInetAddress().getHostAddress());
-
-                    java.io.BufferedReader in = new java.io.BufferedReader(
-                            new java.io.InputStreamReader(cliente.getInputStream()));
-                    java.io.PrintWriter out = new java.io.PrintWriter(cliente.getOutputStream(), true);
-
-                    String msg = in.readLine();
-                    System.out.println("[Servidor] Recebido do cliente: " + msg);
-
-                    out.println("Olá cliente! Servidor recebeu: " + msg);
-                    cliente.close();
-                }
-            } catch (Exception e) {
-                System.err.println("[Servidor] Erro TCP: " + e.getMessage());
-            }
-        }).start();
-
         try {
             Connection conn = db.getConnection();
             Statement stmt = conn.createStatement();
@@ -119,7 +124,6 @@ public class Main {
             System.err.println("[DB] Erro ao listar docentes: " + e.getMessage());
         }
 
-        
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             db.close();
             System.out.println("[Servidor] Encerrado com segurança.");
