@@ -47,9 +47,17 @@ public class Main {
     private static void processarMensagem(DatagramSocket socket, String mensagem, InetAddress ip, int porto) {
         int portoTCP = -1;
         try {
-            if (mensagem.startsWith("REGISTO:") || mensagem.startsWith("HEARTBEAT:")) {
-                portoTCP = Integer.parseInt(mensagem.split(":", 2)[1]);
-            }
+           if (mensagem.startsWith("REGISTO:") || mensagem.startsWith("HEARTBEAT:")) {
+    String[] partes = mensagem.split(":");
+    if (partes.length >= 2) {
+        try {
+            portoTCP = Integer.parseInt(partes[1]); // o primeiro porto é o que queremos (para clientes)
+        } catch (NumberFormatException e) {
+            System.err.println("[Diretoria] Erro ao ler porto TCP da mensagem: " + mensagem);
+        }
+    }
+}
+
         } catch (Exception ignored) {}
 
         final int portoChave = (portoTCP > -1) ? portoTCP : porto;

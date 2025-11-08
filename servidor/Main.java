@@ -7,6 +7,9 @@ import java.sql.*;
 public class Main {
     public static void main(String[] args) {
         String dbPath = "servidor/sistema.db";
+        DatabaseManager db = new DatabaseManager(dbPath);
+        db.connect();
+        db.createTables();
 
         try {
             String ipDiretoria = "127.0.0.1";
@@ -34,6 +37,7 @@ public class Main {
             String resposta = new String(respostaPacket.getData(), 0, respostaPacket.getLength());
             System.out.println("[Servidor] Resposta da diretoria: " + resposta);
 
+            // ===== HEARTBEAT THREAD =====
             new Thread(() -> {
                 try {
                     while (true) {
@@ -49,6 +53,7 @@ public class Main {
                 }
             }, "HB-Thread").start();
 
+            // ===== TCP CLIENT HANDLER =====
             new Thread(() -> {
                 try {
                     System.out.println("[Servidor] À escuta de clientes em TCP no porto " + portoTCP);
@@ -57,17 +62,61 @@ public class Main {
                         Socket cliente = servidorClientes.accept();
                         System.out.println("[Servidor] Cliente conectado: " + cliente.getInetAddress().getHostAddress());
 
-                        java.io.BufferedReader in = new java.io.BufferedReader(
-                                new java.io.InputStreamReader(cliente.getInputStream()));
-                        java.io.PrintWriter out = new java.io.PrintWriter(cliente.getOutputStream(), true);
+                        try (
+    java.io.BufferedReader in = new java.io.BufferedReader(
+        new java.io.InputStreamReader(cliente.getInputStream()));
+    java.io.PrintWriter out = new java.io.PrintWriter(cliente.getOutputStream(), true)
+) {
+    String msg;
+    // lê até o cliente fechar o socket
+    while ((msg = in.readLine()) != null) {
+        System.out.println("[Servidor] Recebido do cliente: " + msg);
 
-                        String msg = in.readLine();
-                        System.out.println("[Servidor] Recebido do cliente: " + msg);
+        if (msg.startsWith("LOGIN_DOCENTE")) {
+            String[] partes = msg.split(";");
+            String email = partes[1];
+            String password = partes[2];
+            boolean ok = db.autenticarDocente(email, password);
+            out.println(ok ? "LOGIN_OK" : "LOGIN_FAIL");
+        }
 
-                        out.println("Olá cliente! Servidor recebeu: " + msg);
-                        cliente.close();
-                    }
-                } catch (Exception e) {
+        else if (msg.startsWith("CRIAR_PERGUNTA")) {
+            String[] partes = msg.split(";");
+            int docenteId = Integer.parseInt(partes[1]);
+            String enunciado = partes[2];
+            String inicio = partes[3];
+            String fim = partes[4];
+            int idPergunta = db.criarPergunta(docenteId, enunciado, inicio, fim);
+            out.println("PERGUNTA_CRIADA:" + idPergunta);
+        }
+
+        else if (msg.startsWith("ADICIONAR_OPCAO")) {
+            String[] partes = msg.split(";");
+            int perguntaId = Integer.parseInt(partes[1]);
+            String letra = partes[2];
+            String texto = partes[3];
+            boolean correta = partes[4].equals("1");
+            db.adicionarOpcao(perguntaId, letra, texto, correta);
+            out.println("OPCAO_ADICIONADA");
+        }
+
+        else if (msg.startsWith("RESPONDER")) {
+            String[] partes = msg.split(";");
+            int estudanteId = Integer.parseInt(partes[1]);
+            int perguntaId = Integer.parseInt(partes[2]);
+            String letra = partes[3];
+            db.guardarResposta(estudanteId, perguntaId, letra);
+            out.println("RESPOSTA_GUARDADA");
+        }
+
+        else {
+            out.println("COMANDO_DESCONHECIDO");
+        }
+    }
+    System.out.println("[Servidor] Cliente desligou.");
+}
+}
+}catch (Exception e) {
                     System.err.println("[Servidor] Erro TCP: " + e.getMessage());
                 }
             }, "TCP-Clientes").start();
@@ -76,12 +125,8 @@ public class Main {
             System.err.println("[Servidor] Erro UDP/TCP inicial: " + e.getMessage());
         }
 
-        DatabaseManager db = new DatabaseManager("servidor/sistema.db");
-        db.connect();
-        db.createTables();
-
-        try {
-            Connection conn = db.getConnection();
+        // ===== SEED DE DADOS DE TESTE =====
+        try (Connection conn = db.getConnection()) {
             PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM Docente WHERE email = ?");
             ps.setString(1, "docente@isec.pt");
             ResultSet rs = ps.executeQuery();
@@ -93,35 +138,10 @@ public class Main {
                 insert.setString(2, "docente@isec.pt");
                 insert.setString(3, hash);
                 insert.executeUpdate();
-                insert.close();
                 System.out.println("[DB] Docente exemplo criado (email: docente@isec.pt | pass: 1234)");
-            } else {
-                System.out.println("[DB] Docente de teste já existe.");
             }
-            rs.close();
-            ps.close();
         } catch (SQLException e) {
             System.err.println("[DB] Erro ao inserir docente de teste: " + e.getMessage());
-        }
-
-        try {
-            Connection conn = db.getConnection();
-            Statement stmt = conn.createStatement();
-            ResultSet rs = stmt.executeQuery("SELECT id, nome, email, data_criacao FROM Docente");
-
-            System.out.println("\n=== LISTA DE DOCENTES ===");
-            while (rs.next()) {
-                System.out.println("ID: " + rs.getInt("id") +
-                        " | Nome: " + rs.getString("nome") +
-                        " | Email: " + rs.getString("email") +
-                        " | Criado em: " + rs.getString("data_criacao"));
-            }
-            System.out.println("=========================\n");
-
-            rs.close();
-            stmt.close();
-        } catch (SQLException e) {
-            System.err.println("[DB] Erro ao listar docentes: " + e.getMessage());
         }
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {

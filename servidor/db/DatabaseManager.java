@@ -194,4 +194,72 @@ public class DatabaseManager {
             System.err.println("[DB] Erro ao fechar ligação: " + e.getMessage());
         }
     }
+    public boolean autenticarDocente(String email, String password) throws SQLException {
+        String sql = "SELECT password_hash FROM Docente WHERE email = ?";
+        PreparedStatement ps = connection.prepareStatement(sql);
+        ps.setString(1, email);
+        ResultSet rs = ps.executeQuery();
+        if (rs.next()) {
+            String hash = rs.getString("password_hash");
+            return hash.equals(hashPassword(password));
+        }
+        return false;
+    }
+
+    public boolean autenticarEstudante(String email, String password) throws SQLException {
+        String sql = "SELECT password_hash FROM Estudante WHERE email = ?";
+        PreparedStatement ps = connection.prepareStatement(sql);
+        ps.setString(1, email);
+        ResultSet rs = ps.executeQuery();
+        if (rs.next()) {
+            String hash = rs.getString("password_hash");
+            return hash.equals(hashPassword(password));
+        }
+        return false;
+    }
+    public int criarPergunta(int docenteId, String enunciado, String dataInicio, String dataFim) throws SQLException {
+        String codigo = gerarCodigoAcesso();
+        String sql = "INSERT INTO Pergunta (enunciado, data_inicio, data_fim, codigo_acesso, docente_id) VALUES (?, ?, ?, ?, ?)";
+        PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+        ps.setString(1, enunciado);
+        ps.setString(2, dataInicio);
+        ps.setString(3, dataFim);
+        ps.setString(4, codigo);
+        ps.setInt(5, docenteId);
+        ps.executeUpdate();
+        ResultSet rs = ps.getGeneratedKeys();
+        int id = rs.next() ? rs.getInt(1) : -1;
+        ps.close();
+        return id;
+    }
+
+    public void adicionarOpcao(int perguntaId, String letra, String texto, boolean correta) throws SQLException {
+        String sql = "INSERT INTO Opcao (pergunta_id, letra, texto, is_correta) VALUES (?, ?, ?, ?)";
+        PreparedStatement ps = connection.prepareStatement(sql);
+        ps.setInt(1, perguntaId);
+        ps.setString(2, letra);
+        ps.setString(3, texto);
+        ps.setInt(4, correta ? 1 : 0);
+        ps.executeUpdate();
+        ps.close();
+    }
+    public void guardarResposta(int estudanteId, int perguntaId, String letra) throws SQLException {
+        String sql = "INSERT OR REPLACE INTO Resposta (estudante_id, pergunta_id, opcao_letra) VALUES (?, ?, ?)";
+        PreparedStatement ps = connection.prepareStatement(sql);
+        ps.setInt(1, estudanteId);
+        ps.setInt(2, perguntaId);
+        ps.setString(3, letra);
+        ps.executeUpdate();
+        ps.close();
+    }
+    public int getDocenteId(String email) throws SQLException {
+        String sql = "SELECT id FROM Docente WHERE email = ?";
+        PreparedStatement ps = connection.prepareStatement(sql);
+        ps.setString(1, email);
+        ResultSet rs = ps.executeQuery();
+        int id = rs.next() ? rs.getInt("id") : -1;
+        ps.close();
+        return id;
+    }
+
 }
