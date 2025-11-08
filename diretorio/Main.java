@@ -97,7 +97,7 @@ public class Main {
                     }
                 }, () -> {
                     if (VERBOSE_HB) {
-                        System.out.println("[Diretoria] ⚠ HEARTBEAT de servidor NÃO REGISTADO: "
+                        System.out.println("[Diretoria] HEARTBEAT de servidor NÃO REGISTADO: "
                                 + ip.getHostAddress() + ":" + portoChave);
                     }
                 });
@@ -165,7 +165,7 @@ public class Main {
                 if (mudou) {
                     if (!servidoresAtivos.isEmpty()) {
                         ServidorInfo novoPrincipal = servidoresAtivos.get(0);
-                        System.out.println("[Diretoria] 🟢 Novo servidor principal: "
+                        System.out.println("[Diretoria] Novo servidor principal: "
                                 + novoPrincipal.getIp().getHostAddress() + ":" + novoPrincipal.getPorto());
                     }
                     mostrarServidores();

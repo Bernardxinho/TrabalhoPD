@@ -15,6 +15,13 @@ public class DatabaseManager {
             Class.forName("org.sqlite.JDBC");
             connection = DriverManager.getConnection("jdbc:sqlite:" + dbPath);
             connection.setAutoCommit(true);
+
+            // Configurações importantes para SQLite com múltiplas threads
+            Statement stmt = connection.createStatement();
+            stmt.execute("PRAGMA journal_mode=WAL;"); // Write-Ahead Logging para melhor concorrência
+            stmt.execute("PRAGMA synchronous=NORMAL;");
+            stmt.close();
+
             System.out.println("[DB] Ligado a: " + dbPath);
         } catch (ClassNotFoundException e) {
             System.err.println("[DB] Driver SQLite não encontrado: " + e.getMessage());
@@ -122,9 +129,15 @@ public class DatabaseManager {
         }
     }
 
-    
-    public int getVersao() {
+    // Método sincronizado para thread-safety
+    public synchronized int getVersao() {
         try {
+            // Verificar se a conexão está fechada
+            if (connection == null || connection.isClosed()) {
+                System.err.println("[DB] Conexão fechada, a reconectar...");
+                connect();
+            }
+
             Statement stmt = connection.createStatement();
             ResultSet rs = stmt.executeQuery("SELECT versao FROM Configuracao WHERE id = 1");
             if (rs.next()) {
@@ -133,25 +146,33 @@ public class DatabaseManager {
                 stmt.close();
                 return versao;
             }
+            stmt.close();
         } catch (SQLException e) {
             System.err.println("[DB] Erro ao obter versão: " + e.getMessage());
+            e.printStackTrace();
         }
         return 0;
     }
 
- 
-    public void incrementarVersao() {
+    // Método sincronizado para thread-safety
+    public synchronized void incrementarVersao() {
         try {
+            // Verificar se a conexão está fechada
+            if (connection == null || connection.isClosed()) {
+                System.err.println("[DB] Conexão fechada, a reconectar...");
+                connect();
+            }
+
             Statement stmt = connection.createStatement();
             stmt.executeUpdate("UPDATE Configuracao SET versao = versao + 1 WHERE id = 1");
             stmt.close();
             System.out.println("[DB] Versão incrementada para: " + getVersao());
         } catch (SQLException e) {
             System.err.println("[DB] Erro ao incrementar versão: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
-  
     public static String hashPassword(String password) {
         try {
             java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
@@ -169,7 +190,6 @@ public class DatabaseManager {
         }
     }
 
- 
     public static String gerarCodigoAcesso() {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         StringBuilder codigo = new StringBuilder();
@@ -181,6 +201,15 @@ public class DatabaseManager {
     }
 
     public Connection getConnection() {
+        try {
+            // Verificar se a conexão está fechada e reconectar se necessário
+            if (connection == null || connection.isClosed()) {
+                System.err.println("[DB] Conexão fechada, a reconectar...");
+                connect();
+            }
+        } catch (SQLException e) {
+            System.err.println("[DB] Erro ao verificar conexão: " + e.getMessage());
+        }
         return connection;
     }
 
@@ -194,30 +223,56 @@ public class DatabaseManager {
             System.err.println("[DB] Erro ao fechar ligação: " + e.getMessage());
         }
     }
-    public boolean autenticarDocente(String email, String password) throws SQLException {
+
+    public synchronized boolean autenticarDocente(String email, String password) throws SQLException {
+        if (connection == null || connection.isClosed()) {
+            connect();
+        }
         String sql = "SELECT password_hash FROM Docente WHERE email = ?";
         PreparedStatement ps = connection.prepareStatement(sql);
         ps.setString(1, email);
         ResultSet rs = ps.executeQuery();
         if (rs.next()) {
             String hash = rs.getString("password_hash");
+            ps.close();
             return hash.equals(hashPassword(password));
         }
+        ps.close();
         return false;
     }
 
-    public boolean autenticarEstudante(String email, String password) throws SQLException {
+    public synchronized boolean autenticarEstudante(String email, String password) throws SQLException {
+        if (connection == null || connection.isClosed()) {
+            connect();
+        }
         String sql = "SELECT password_hash FROM Estudante WHERE email = ?";
         PreparedStatement ps = connection.prepareStatement(sql);
         ps.setString(1, email);
         ResultSet rs = ps.executeQuery();
         if (rs.next()) {
             String hash = rs.getString("password_hash");
+            ps.close();
             return hash.equals(hashPassword(password));
         }
+        ps.close();
         return false;
     }
-    public int criarPergunta(int docenteId, String enunciado, String dataInicio, String dataFim) throws SQLException {
+
+    // Classe interna para retornar resultado completo
+    public static class PerguntaResult {
+        public int id;
+        public String codigoAcesso;
+
+        public PerguntaResult(int id, String codigoAcesso) {
+            this.id = id;
+            this.codigoAcesso = codigoAcesso;
+        }
+    }
+
+    public synchronized PerguntaResult criarPerguntaCompleta(int docenteId, String enunciado, String dataInicio, String dataFim) throws SQLException {
+        if (connection == null || connection.isClosed()) {
+            connect();
+        }
         String codigo = gerarCodigoAcesso();
         String sql = "INSERT INTO Pergunta (enunciado, data_inicio, data_fim, codigo_acesso, docente_id) VALUES (?, ?, ?, ?, ?)";
         PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
@@ -230,10 +285,13 @@ public class DatabaseManager {
         ResultSet rs = ps.getGeneratedKeys();
         int id = rs.next() ? rs.getInt(1) : -1;
         ps.close();
-        return id;
+        return new PerguntaResult(id, codigo);
     }
 
-    public void adicionarOpcao(int perguntaId, String letra, String texto, boolean correta) throws SQLException {
+    public synchronized void adicionarOpcao(int perguntaId, String letra, String texto, boolean correta) throws SQLException {
+        if (connection == null || connection.isClosed()) {
+            connect();
+        }
         String sql = "INSERT INTO Opcao (pergunta_id, letra, texto, is_correta) VALUES (?, ?, ?, ?)";
         PreparedStatement ps = connection.prepareStatement(sql);
         ps.setInt(1, perguntaId);
@@ -243,7 +301,11 @@ public class DatabaseManager {
         ps.executeUpdate();
         ps.close();
     }
-    public void guardarResposta(int estudanteId, int perguntaId, String letra) throws SQLException {
+
+    public synchronized void guardarResposta(int estudanteId, int perguntaId, String letra) throws SQLException {
+        if (connection == null || connection.isClosed()) {
+            connect();
+        }
         String sql = "INSERT OR REPLACE INTO Resposta (estudante_id, pergunta_id, opcao_letra) VALUES (?, ?, ?)";
         PreparedStatement ps = connection.prepareStatement(sql);
         ps.setInt(1, estudanteId);
@@ -252,7 +314,11 @@ public class DatabaseManager {
         ps.executeUpdate();
         ps.close();
     }
-    public int getDocenteId(String email) throws SQLException {
+
+    public synchronized int getDocenteId(String email) throws SQLException {
+        if (connection == null || connection.isClosed()) {
+            connect();
+        }
         String sql = "SELECT id FROM Docente WHERE email = ?";
         PreparedStatement ps = connection.prepareStatement(sql);
         ps.setString(1, email);
@@ -262,4 +328,12 @@ public class DatabaseManager {
         return id;
     }
 
+    public synchronized void executarQuery(String sql) throws SQLException {
+        if (connection == null || connection.isClosed()) {
+            connect();
+        }
+        Statement stmt = connection.createStatement();
+        stmt.executeUpdate(sql);
+        stmt.close();
+    }
 }

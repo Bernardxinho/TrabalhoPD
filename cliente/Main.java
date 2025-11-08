@@ -39,11 +39,11 @@ public class Main {
             BufferedReader input = new BufferedReader(new InputStreamReader(socketTCP.getInputStream()));
             PrintWriter output = new PrintWriter(socketTCP.getOutputStream(), true);
 
-output.println("LOGIN_DOCENTE;docente@isec.pt;1234");
-System.out.println("[Cliente] " + input.readLine());
+            output.println("LOGIN_DOCENTE;docente@isec.pt;1234");
+            System.out.println("[Cliente] " + input.readLine());
 
-output.println("CRIAR_PERGUNTA;1;Qual é a capital de Portugal?;2025-11-10 10:00;2025-11-11 10:00");
-System.out.println("[Cliente] " + input.readLine());
+            output.println("CRIAR_PERGUNTA;1;Qual é a capital de Portugal?;2025-11-10 10:00;2025-11-11 10:00");
+            System.out.println("[Cliente] " + input.readLine());
 
 
             String respostaServidor = input.readLine();
