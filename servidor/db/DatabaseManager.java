@@ -328,6 +328,46 @@ public class DatabaseManager {
         return id;
     }
 
+    public synchronized boolean validarCodigoDocente(String codigoClaro) throws SQLException {
+        if (connection == null || connection.isClosed()) connect();
+        try (Statement st = connection.createStatement();
+            ResultSet rs = st.executeQuery("SELECT codigo_registo_docentes FROM Configuracao WHERE id=1")) {
+            if (!rs.next()) return false;
+            String hashBD = rs.getString(1);
+            String hashIntroduzido = hashPassword(codigoClaro);
+            return hashBD != null && hashBD.equals(hashIntroduzido);
+        }
+    }
+
+    public synchronized int criarDocente(String nome, String email, String passwordClaro) throws SQLException {
+        if (connection == null || connection.isClosed()) connect();
+        String sql = "INSERT INTO Docente (nome, email, password_hash) VALUES (?, ?, ?)";
+        try (PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            ps.setString(1, nome);
+            ps.setString(2, email);
+            ps.setString(3, hashPassword(passwordClaro));
+            ps.executeUpdate();
+            try (ResultSet rs = ps.getGeneratedKeys()) {
+                return rs.next() ? rs.getInt(1) : -1;
+            }
+        }
+    }
+
+    public synchronized int criarEstudante(int numero, String nome, String email, String passwordClaro) throws SQLException {
+        if (connection == null || connection.isClosed()) connect();
+        String sql = "INSERT INTO Estudante (numero, nome, email, password_hash) VALUES (?, ?, ?, ?)";
+        try (PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            ps.setInt(1, numero);
+            ps.setString(2, nome);
+            ps.setString(3, email);
+            ps.setString(4, hashPassword(passwordClaro));
+            ps.executeUpdate();
+            try (ResultSet rs = ps.getGeneratedKeys()) {
+                return rs.next() ? rs.getInt(1) : -1;
+            }
+        }
+    }
+
     public synchronized void executarQuery(String sql) throws SQLException {
         if (connection == null || connection.isClosed()) {
             connect();

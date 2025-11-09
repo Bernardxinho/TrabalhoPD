@@ -288,6 +288,62 @@ public class Main {
                                         enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), querySql);
                                     }
 
+                                    else if (msg.startsWith("REGISTAR_DOCENTE")) {
+                                    String[] p = msg.split(";", 5);
+                                    if (p.length < 5) { out.println("ERRO:ARGS"); continue; }
+                                    String nome = p[1], email = p[2], pass = p[3], codigo = p[4];
+
+                                    try {
+                                        if (!db.validarCodigoDocente(codigo)) {
+                                            out.println("ERRO:CODIGO_DOCENTE_INVALIDO");
+                                            continue;
+                                        }
+
+                                        int id = db.criarDocente(nome, email, pass);
+                                        db.incrementarVersao();
+                                        out.println("DOCENTE_CRIADO:" + id);
+
+                                        String passHash = servidor.db.DatabaseManager.hashPassword(pass);
+                                        String q = String.format(
+                                            "INSERT INTO Docente (nome,email,password_hash) VALUES ('%s','%s','%s')",
+                                            nome.replace("'", "''"), email.replace("'", "''"), passHash
+                                        );
+                                        enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), q);
+
+                                    } catch (SQLException e) {
+                                        String m = String.valueOf(e.getMessage());
+                                        if (m.contains("UNIQUE")) out.println("ERRO:EMAIL_DUPLICADO");
+                                        else out.println("ERRO:SQL");
+                                    }
+                                }
+
+                                else if (msg.startsWith("REGISTAR_ESTUDANTE")) {
+                                    String[] p = msg.split(";", 5);
+                                    if (p.length < 5) { out.println("ERRO:ARGS"); continue; }
+
+                                    try {
+                                        int numero = Integer.parseInt(p[1]);
+                                        String nome = p[2], email = p[3], pass = p[4];
+                                        int id = db.criarEstudante(numero, nome, email, pass);
+                                        db.incrementarVersao();
+                                        out.println("ESTUDANTE_CRIADO:" + id);
+
+                                        String passHash = servidor.db.DatabaseManager.hashPassword(pass);
+                                        String q = String.format(
+                                            "INSERT INTO Estudante (numero,nome,email,password_hash) VALUES (%d,'%s','%s','%s')",
+                                            numero, nome.replace("'", "''"), email.replace("'", "''"), passHash
+                                        );
+                                        enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), q);
+
+                                    } catch (NumberFormatException nfe) {
+                                        out.println("ERRO:NUMERO_INVALIDO");
+                                    } catch (SQLException e) {
+                                        String m = String.valueOf(e.getMessage());
+                                        if (m.contains("UNIQUE")) out.println("ERRO:EMAIL_OU_NUMERO_DUP");
+                                        else out.println("ERRO:SQL");
+                                    }
+                                }
+
 
                                     else {
                                         out.println("COMANDO_DESCONHECIDO");

@@ -81,7 +81,23 @@ public class Main {
                                     if (!letra.isEmpty()) letra = letra.substring(0,1).toLowerCase();
                                     wire = "RESPONDER;" + estId + ";" + pid + ";" + letra;
                                     break;
+                                }case "6": { // Registar docente
+                                    System.out.print("Nome: ");        String nome = sc.nextLine().trim();
+                                    System.out.print("Email: ");       String email = sc.nextLine().trim();
+                                    System.out.print("Password: ");    String pass = sc.nextLine().trim();
+                                    System.out.print("Código docente: "); String cod = sc.nextLine().trim(); // por defeito: DOCENTE2025
+                                    wire = "REGISTAR_DOCENTE;" + nome + ";" + email + ";" + pass + ";" + cod;
+                                    break;
                                 }
+                                case "7": { // Registar estudante
+                                    System.out.print("Número: ");      String num  = sc.nextLine().trim();
+                                    System.out.print("Nome: ");        String nome = sc.nextLine().trim();
+                                    System.out.print("Email: ");       String email= sc.nextLine().trim();
+                                    System.out.print("Password: ");    String pass = sc.nextLine().trim();
+                                    wire = "REGISTAR_ESTUDANTE;" + num + ";" + nome + ";" + email + ";" + pass;
+                                    break;
+                                }
+
                                 default:
                                     System.out.println("[Cliente] Opção inválida.");
                                     continue;
@@ -158,6 +174,8 @@ public class Main {
         System.out.println("  3) Criar pergunta");
         System.out.println("  4) Adicionar opção");
         System.out.println("  5) Responder");
+        System.out.println("  6) Registar docente");
+        System.out.println("  7) Registar estudante");
         System.out.println("  0) Sair");
     }
 }
