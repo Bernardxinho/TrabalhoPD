@@ -15,6 +15,14 @@ public class Main {
     private static volatile int portoTCPSync = 0;
     private static InetAddress meuIP;
 
+    
+    private static class Sessao {
+        boolean autenticado = false;
+        String role = null;          // "DOCENTE" ou "ESTUDANTE"
+        Integer docenteId = null;
+        Integer estudanteId = null;
+    }
+
     public static void main(String[] args) {
         String dbPath = "servidor/sistema.db";
         DatabaseManager db = new DatabaseManager(dbPath);
@@ -54,13 +62,37 @@ public class Main {
             // Determinar se sou o principal
             // A diretoria retorna info do servidor principal (o mais antigo registado)
             // Se for o meu porto, sou o principal
-            if (resposta.contains(":" + portoTCPSync)) {
-                ehPrincipal = true;
-                System.out.println("[Servidor] SOU O SERVIDOR PRINCIPAL!");
-            } else {
-                ehPrincipal = false;
-                System.out.println("[Servidor] Sou servidor BACKUP");
-            }
+            // ✅ NOVO: perguntar quem é o principal
+            byte[] pedidoPrincipal = "PEDIDO_CLIENTE_SERVIDOR".getBytes();
+            DatagramPacket pedPacket = new DatagramPacket(
+                pedidoPrincipal, pedidoPrincipal.length,
+                ipDiretoria_addr, portoDiretoria);
+            socket.send(pedPacket);
+
+            byte[] bufResp = new byte[1024];
+            DatagramPacket respPrincipal = new DatagramPacket(bufResp, bufResp.length);
+            socket.receive(respPrincipal);
+            String principal = new String(respPrincipal.getData(), 0, respPrincipal.getLength());
+
+           String principalStr = principal.trim();
+            String[] hp = principalStr.split(":");
+            String hostP = hp[0];
+            int portP = Integer.parseInt(hp[1]);
+
+            boolean ipEhLocal =
+                    hostP.equals("127.0.0.1") ||
+                    hostP.equalsIgnoreCase("localhost") ||
+                    hostP.equals(meuIP.getHostAddress()) ||
+                    isLocalAddress(hostP); // helper em baixo
+
+            boolean portoIgual = (portP == portoTCPClientes);
+
+        // principal se o porto devolvido é o meu e o IP é local
+        ehPrincipal = portoIgual && ipEhLocal;
+
+        System.out.printf("[Servidor] Identificação: principal=%s | principalDir=%s | meu=%s:%d%n",
+                ehPrincipal ? "SIM" : "NAO", principalStr, meuIP.getHostAddress(), portoTCPClientes);
+
 
             // ===== THREAD DE RECEÇÃO DE HEARTBEATS MULTICAST =====
             new Thread(() -> {
@@ -123,7 +155,7 @@ public class Main {
                         // 1. Enviar para a diretoria (UDP)
                         DatagramPacket hbPacket = new DatagramPacket(hbBytes, hbBytes.length, ipDiretoria_addr, portoDiretoria);
                         socket.send(hbPacket);
-                        System.out.println("[Servidor] Heartbeat enviado para diretoria.");
+                       /*  System.out.println("[Servidor] Heartbeat enviado para diretoria."); */
 
                         // 2. Enviar para o grupo multicast (APENAS se sou o principal)
                         if (ehPrincipal) {
@@ -134,8 +166,8 @@ public class Main {
                                     MULTICAST_PORT
                             );
                             socket.send(multicastPacket);
-                            System.out.println("[Servidor] Heartbeat multicast enviado (versão BD: " + versaoAtual + ")");
-                        }
+/*                             System.out.println("[Servidor] Heartbeat multicast enviado (versão BD: " + versaoAtual + ")");
+ */                        }
                     }
                 } catch (Exception e) {
                     System.err.println("[Servidor] Erro no heartbeat: " + e.getMessage());
@@ -161,6 +193,7 @@ public class Main {
 
                         // Criar thread para cada cliente
                         new Thread(() -> {
+                             Sessao sessao = new Sessao();
                             try (
                                     java.io.BufferedReader in = new java.io.BufferedReader(
                                             new java.io.InputStreamReader(cliente.getInputStream()));
@@ -171,77 +204,90 @@ public class Main {
                                     System.out.println("[Servidor] Recebido do cliente: " + msg);
 
                                     if (msg.startsWith("LOGIN_DOCENTE")) {
-                                        String[] partes = msg.split(";");
-                                        String email = partes[1];
-                                        String password = partes[2];
-                                        boolean ok = db.autenticarDocente(email, password);
-                                        out.println(ok ? "LOGIN_OK" : "LOGIN_FAIL");
+                                        String[] p = msg.split(";");
+                                        String email = p[1], pass = p[2];
+                                        boolean ok = db.autenticarDocente(email, pass);
+                                        if (ok) {
+                                            sessao.autenticado = true;
+                                            sessao.role = "DOCENTE";
+                                            sessao.docenteId = db.getDocenteId(email); // já tens este método
+                                            out.println("LOGIN_OK");
+                                        } else out.println("LOGIN_FAIL");
                                     }
+                                    else if (msg.startsWith("LOGIN_ESTUDANTE")) {
+                                        String[] p = msg.split(";");
+                                        String email = p[1], pass = p[2];
+                                        boolean ok = db.autenticarEstudante(email, pass);
+                                        if (ok) {
+                                            sessao.autenticado = true;
+                                            sessao.role = "ESTUDANTE";
+                                            sessao.estudanteId = getEstudanteId(db, email); // helper simples
+                                            out.println("LOGIN_OK");
+                                        } else out.println("LOGIN_FAIL");
+                                    }
+
 
                                     else if (msg.startsWith("CRIAR_PERGUNTA")) {
-                                        String[] partes = msg.split(";");
-                                        int docenteId = Integer.parseInt(partes[1]);
-                                        String enunciado = partes[2];
-                                        String inicio = partes[3];
-                                        String fim = partes[4];
+                                        if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) {
+                                            out.println("ERRO: PERMISSAO_NEGADA"); continue;
+                                        }
+                                        // Aceitar novo formato sem docenteId: CRIAR_PERGUNTA;enunciado;inicio;fim
+                                        // e também o antigo (com docenteId) para compatibilidade
+                                        String[] p = msg.split(";");
+                                        String enunciado, inicio, fim;
+                                        if (p.length == 5) { enunciado = p[2]; inicio = p[3]; fim = p[4]; }
+                                        else { enunciado = p[1]; inicio = p[2]; fim = p[3]; }
 
-                                        DatabaseManager.PerguntaResult resultado = db.criarPerguntaCompleta(docenteId, enunciado, inicio, fim);
+                                        var res = db.criarPerguntaCompleta(sessao.docenteId, enunciado, inicio, fim);
                                         db.incrementarVersao();
-
-                                        out.println("PERGUNTA_CRIADA:" + resultado.id + ":" + resultado.codigoAcesso);
-
-                                        // Construir a query SQL para replicação
+                                        out.println("PERGUNTA_CRIADA:" + res.id + ":" + res.codigoAcesso);
                                         String querySql = String.format(
-                                                "INSERT INTO Pergunta (enunciado, data_inicio, data_fim, codigo_acesso, docente_id) VALUES ('%s', '%s', '%s', '%s', %d)",
-                                                enunciado.replace("'", "''"), inicio, fim, resultado.codigoAcesso, docenteId
+                                        "INSERT INTO Pergunta (enunciado,data_inicio,data_fim,codigo_acesso,docente_id) " +
+                                        "VALUES ('%s','%s','%s','%s',%d)",
+                                        enunciado.replace("'", "''"), inicio, fim, res.codigoAcesso, sessao.docenteId
                                         );
-
-                                        // Enviar heartbeat imediato com a query
                                         enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), querySql);
                                     }
+
 
                                     else if (msg.startsWith("ADICIONAR_OPCAO")) {
-                                        String[] partes = msg.split(";");
-                                        int perguntaId = Integer.parseInt(partes[1]);
-                                        String letra = partes[2];
-                                        String texto = partes[3];
-                                        boolean correta = partes[4].equals("1");
-
-                                        // Construir a query SQL para replicação
-                                        String querySql = String.format(
-                                                "INSERT INTO Opcao (pergunta_id, letra, texto, is_correta) VALUES (%d, '%s', '%s', %d)",
-                                                perguntaId, letra, texto.replace("'", "''"), correta ? 1 : 0
-                                        );
-
+                                        if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) {
+                                            out.println("ERRO: PERMISSAO_NEGADA"); continue;
+                                        }
+                                        String[] p = msg.split(";");
+                                        int perguntaId = Integer.parseInt(p[1]);
+                                        String letra = p[2];
+                                        String texto = p[3];
+                                        boolean correta = p[4].equals("1");
                                         db.adicionarOpcao(perguntaId, letra, texto, correta);
                                         db.incrementarVersao();
-
                                         out.println("OPCAO_ADICIONADA");
-
-                                        // Enviar heartbeat imediato com a query
+                                        String querySql = String.format(
+                                        "INSERT INTO Opcao (pergunta_id,letra,texto,is_correta) VALUES (%d,'%s','%s',%d)",
+                                        perguntaId, letra, texto.replace("'", "''"), correta ? 1 : 0
+                                        );
                                         enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), querySql);
                                     }
+
 
                                     else if (msg.startsWith("RESPONDER")) {
-                                        String[] partes = msg.split(";");
-                                        int estudanteId = Integer.parseInt(partes[1]);
-                                        int perguntaId = Integer.parseInt(partes[2]);
-                                        String letra = partes[3];
+                                        if (!sessao.autenticado || !"ESTUDANTE".equals(sessao.role)) {
+                                            out.println("ERRO: PERMISSAO_NEGADA"); continue;
+                                        }
+                                        String[] p = msg.split(";");
+                                        int perguntaId = Integer.parseInt(p[1]);     // (antigo tinha estudanteId; agora não precisa)
+                                        String letra = p[2];
 
-                                        // Construir a query SQL para replicação
-                                        String querySql = String.format(
-                                                "INSERT OR REPLACE INTO Resposta (estudante_id, pergunta_id, opcao_letra) VALUES (%d, %d, '%s')",
-                                                estudanteId, perguntaId, letra
-                                        );
-
-                                        db.guardarResposta(estudanteId, perguntaId, letra);
+                                        db.guardarResposta(sessao.estudanteId, perguntaId, letra);
                                         db.incrementarVersao();
-
                                         out.println("RESPOSTA_GUARDADA");
-
-                                        // Enviar heartbeat imediato com a query
+                                        String querySql = String.format(
+                                        "INSERT OR REPLACE INTO Resposta (estudante_id,pergunta_id,opcao_letra) VALUES (%d,%d,'%s')",
+                                        sessao.estudanteId, perguntaId, letra
+                                        );
                                         enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), querySql);
                                     }
+
 
                                     else {
                                         out.println("COMANDO_DESCONHECIDO");
@@ -380,4 +426,32 @@ public class Main {
             e.printStackTrace();
         }
     }
+    // ===== HELPER: verifica se um IP pertence a esta máquina =====
+    private static boolean isLocalAddress(String host) {
+        try {
+            InetAddress addr = InetAddress.getByName(host);
+            if (addr.isLoopbackAddress()) return true;
+            java.util.Enumeration<java.net.NetworkInterface> nics = java.net.NetworkInterface.getNetworkInterfaces();
+            while (nics.hasMoreElements()) {
+                java.net.NetworkInterface ni = nics.nextElement();
+                java.util.Enumeration<java.net.InetAddress> addrs = ni.getInetAddresses();
+                while (addrs.hasMoreElements()) {
+                    if (addrs.nextElement().equals(addr)) return true;
+                }
+            }
+        } catch (Exception ignore) {}
+        return false;
+    }
+
+
+     private static int getEstudanteId(DatabaseManager db, String email) throws SQLException {
+        try (PreparedStatement ps = db.getConnection()
+            .prepareStatement("SELECT id FROM Estudante WHERE email=?")) {
+            ps.setString(1, email);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : -1;
+            }
+        }
+}
+
 }

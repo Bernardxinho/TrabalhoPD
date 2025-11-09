@@ -46,18 +46,16 @@ public class Main {
 
     private static void processarMensagem(DatagramSocket socket, String mensagem, InetAddress ip, int porto) {
         int portoTCP = -1;
-        try {
-           if (mensagem.startsWith("REGISTO:") || mensagem.startsWith("HEARTBEAT:")) {
-    String[] partes = mensagem.split(":");
-    if (partes.length >= 2) {
-        try {
-            portoTCP = Integer.parseInt(partes[1]); // o primeiro porto é o que queremos (para clientes)
+       try {
+            if (mensagem.startsWith("REGISTO:")) {
+                String[] p = mensagem.split(":");
+                if (p.length >= 2) portoTCP = Integer.parseInt(p[1]);          // REGISTO:<portoClientes>[:portoSync]
+            } else if (mensagem.startsWith("HEARTBEAT:")) {
+                String[] p = mensagem.split(":");
+                if (p.length >= 3) portoTCP = Integer.parseInt(p[2]);          // HEARTBEAT:<versao>:<portoClientes>:<portoSync>
+            }
         } catch (NumberFormatException e) {
-            System.err.println("[Diretoria] Erro ao ler porto TCP da mensagem: " + mensagem);
-        }
-    }
-}
-
+            System.err.println("[Diretoria] Erro a ler porto: " + mensagem);
         } catch (Exception ignored) {}
 
         final int portoChave = (portoTCP > -1) ? portoTCP : porto;
@@ -91,9 +89,9 @@ public class Main {
                     hbCount++;
 
                     if (VERBOSE_HB) {
-                        System.out.println("[Diretoria] Heartbeat recebido de "
+                       /*  System.out.println("[Diretoria] Heartbeat recebido de "
                                 + ip.getHostAddress() + ":" + portoChave
-                                + " (lastSeen=" + s.getUltimaAtualizacao().format(FMT_HHMMSS) + ")");
+                                + " (lastSeen=" + s.getUltimaAtualizacao().format(FMT_HHMMSS) + ")"); */
                     }
                 }, () -> {
                     if (VERBOSE_HB) {
