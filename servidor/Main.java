@@ -1,6 +1,7 @@
 package servidor;
 
 import servidor.db.DatabaseManager;
+import servidor.db.PerguntaDetalhes;
 import java.net.*;
 import java.sql.*;
 import java.io.IOException;
@@ -15,7 +16,7 @@ public class Main {
     private static volatile int portoTCPSync = 0;
     private static InetAddress meuIP;
 
-    
+
     private static class Sessao {
         boolean autenticado = false;
         String role = null;          // "DOCENTE" ou "ESTUDANTE"
@@ -60,13 +61,10 @@ public class Main {
             System.out.println("[Servidor] Resposta da diretoria: " + resposta);
 
             // Determinar se sou o principal
-            // A diretoria retorna info do servidor principal (o mais antigo registado)
-            // Se for o meu porto, sou o principal
-            // ✅ NOVO: perguntar quem é o principal
             byte[] pedidoPrincipal = "PEDIDO_CLIENTE_SERVIDOR".getBytes();
             DatagramPacket pedPacket = new DatagramPacket(
-                pedidoPrincipal, pedidoPrincipal.length,
-                ipDiretoria_addr, portoDiretoria);
+                    pedidoPrincipal, pedidoPrincipal.length,
+                    ipDiretoria_addr, portoDiretoria);
             socket.send(pedPacket);
 
             byte[] bufResp = new byte[1024];
@@ -74,24 +72,23 @@ public class Main {
             socket.receive(respPrincipal);
             String principal = new String(respPrincipal.getData(), 0, respPrincipal.getLength());
 
-           String principalStr = principal.trim();
+            String principalStr = principal.trim();
             String[] hp = principalStr.split(":");
             String hostP = hp[0];
             int portP = Integer.parseInt(hp[1]);
 
             boolean ipEhLocal =
                     hostP.equals("127.0.0.1") ||
-                    hostP.equalsIgnoreCase("localhost") ||
-                    hostP.equals(meuIP.getHostAddress()) ||
-                    isLocalAddress(hostP); // helper em baixo
+                            hostP.equalsIgnoreCase("localhost") ||
+                            hostP.equals(meuIP.getHostAddress()) ||
+                            isLocalAddress(hostP);
 
             boolean portoIgual = (portP == portoTCPClientes);
 
-        // principal se o porto devolvido é o meu e o IP é local
-        ehPrincipal = portoIgual && ipEhLocal;
+            ehPrincipal = portoIgual && ipEhLocal;
 
-        System.out.printf("[Servidor] Identificação: principal=%s | principalDir=%s | meu=%s:%d%n",
-                ehPrincipal ? "SIM" : "NAO", principalStr, meuIP.getHostAddress(), portoTCPClientes);
+            System.out.printf("[Servidor] Identificação: principal=%s | principalDir=%s | meu=%s:%d%n",
+                    ehPrincipal ? "SIM" : "NAO", principalStr, meuIP.getHostAddress(), portoTCPClientes);
 
 
             // ===== THREAD DE RECEÇÃO DE HEARTBEATS MULTICAST =====
@@ -101,7 +98,6 @@ public class Main {
                     multicastSocket = new MulticastSocket(MULTICAST_PORT);
                     InetAddress grupo = InetAddress.getByName(MULTICAST_ADDRESS);
 
-                    // Join ao grupo multicast
                     SocketAddress grupoAddr = new InetSocketAddress(grupo, MULTICAST_PORT);
                     NetworkInterface netInterface = NetworkInterface.getByInetAddress(InetAddress.getLocalHost());
                     multicastSocket.joinGroup(grupoAddr, netInterface);
@@ -117,14 +113,12 @@ public class Main {
                         String mensagemRecebida = new String(packetMcast.getData(), 0, packetMcast.getLength());
                         InetAddress remetenteIP = packetMcast.getAddress();
 
-                        // Ignorar mensagens do próprio servidor
                         if (remetenteIP.equals(meuIP)) {
                             continue;
                         }
 
                         System.out.println("[Multicast] Recebido: " + mensagemRecebida);
 
-                        // Processar apenas se NÃO sou o principal
                         if (!ehPrincipal) {
                             processarHeartbeatMulticast(mensagemRecebida, db);
                         }
@@ -148,16 +142,12 @@ public class Main {
 
                         int versaoAtual = db.getVersao();
 
-                        // Formato: HEARTBEAT:versao:portoClientes:portoSync
                         String hbMsg = "HEARTBEAT:" + versaoAtual + ":" + portoTCPClientes + ":" + portoTCPSync;
                         byte[] hbBytes = hbMsg.getBytes();
 
-                        // 1. Enviar para a diretoria (UDP)
                         DatagramPacket hbPacket = new DatagramPacket(hbBytes, hbBytes.length, ipDiretoria_addr, portoDiretoria);
                         socket.send(hbPacket);
-                       /*  System.out.println("[Servidor] Heartbeat enviado para diretoria."); */
 
-                        // 2. Enviar para o grupo multicast (APENAS se sou o principal)
                         if (ehPrincipal) {
                             DatagramPacket multicastPacket = new DatagramPacket(
                                     hbBytes,
@@ -166,8 +156,7 @@ public class Main {
                                     MULTICAST_PORT
                             );
                             socket.send(multicastPacket);
-/*                             System.out.println("[Servidor] Heartbeat multicast enviado (versão BD: " + versaoAtual + ")");
- */                        }
+                        }
                     }
                 } catch (Exception e) {
                     System.err.println("[Servidor] Erro no heartbeat: " + e.getMessage());
@@ -182,7 +171,6 @@ public class Main {
                     while (true) {
                         Socket cliente = servidorClientes.accept();
 
-                        // Apenas o servidor principal atende clientes
                         if (!ehPrincipal) {
                             System.out.println("[Servidor] Não sou principal, rejeitando cliente.");
                             cliente.close();
@@ -191,9 +179,8 @@ public class Main {
 
                         System.out.println("[Servidor] Cliente conectado: " + cliente.getInetAddress().getHostAddress());
 
-                        // Criar thread para cada cliente
                         new Thread(() -> {
-                             Sessao sessao = new Sessao();
+                            Sessao sessao = new Sessao();
                             try (
                                     java.io.BufferedReader in = new java.io.BufferedReader(
                                             new java.io.InputStreamReader(cliente.getInputStream()));
@@ -210,7 +197,7 @@ public class Main {
                                         if (ok) {
                                             sessao.autenticado = true;
                                             sessao.role = "DOCENTE";
-                                            sessao.docenteId = db.getDocenteId(email); // já tens este método
+                                            sessao.docenteId = db.getDocenteId(email);
                                             out.println("LOGIN_OK");
                                         } else out.println("LOGIN_FAIL");
                                     }
@@ -221,18 +208,14 @@ public class Main {
                                         if (ok) {
                                             sessao.autenticado = true;
                                             sessao.role = "ESTUDANTE";
-                                            sessao.estudanteId = getEstudanteId(db, email); // helper simples
+                                            sessao.estudanteId = getEstudanteId(db, email);
                                             out.println("LOGIN_OK");
                                         } else out.println("LOGIN_FAIL");
                                     }
-
-
                                     else if (msg.startsWith("CRIAR_PERGUNTA")) {
                                         if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) {
                                             out.println("ERRO: PERMISSAO_NEGADA"); continue;
                                         }
-                                        // Aceitar novo formato sem docenteId: CRIAR_PERGUNTA;enunciado;inicio;fim
-                                        // e também o antigo (com docenteId) para compatibilidade
                                         String[] p = msg.split(";");
                                         String enunciado, inicio, fim;
                                         if (p.length == 5) { enunciado = p[2]; inicio = p[3]; fim = p[4]; }
@@ -242,14 +225,12 @@ public class Main {
                                         db.incrementarVersao();
                                         out.println("PERGUNTA_CRIADA:" + res.id + ":" + res.codigoAcesso);
                                         String querySql = String.format(
-                                        "INSERT INTO Pergunta (enunciado,data_inicio,data_fim,codigo_acesso,docente_id) " +
-                                        "VALUES ('%s','%s','%s','%s',%d)",
-                                        enunciado.replace("'", "''"), inicio, fim, res.codigoAcesso, sessao.docenteId
+                                                "INSERT INTO Pergunta (enunciado,data_inicio,data_fim,codigo_acesso,docente_id) " +
+                                                        "VALUES ('%s','%s','%s','%s',%d)",
+                                                enunciado.replace("'", "''"), inicio, fim, res.codigoAcesso, sessao.docenteId
                                         );
                                         enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), querySql);
                                     }
-
-
                                     else if (msg.startsWith("ADICIONAR_OPCAO")) {
                                         if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) {
                                             out.println("ERRO: PERMISSAO_NEGADA"); continue;
@@ -263,87 +244,275 @@ public class Main {
                                         db.incrementarVersao();
                                         out.println("OPCAO_ADICIONADA");
                                         String querySql = String.format(
-                                        "INSERT INTO Opcao (pergunta_id,letra,texto,is_correta) VALUES (%d,'%s','%s',%d)",
-                                        perguntaId, letra, texto.replace("'", "''"), correta ? 1 : 0
+                                                "INSERT INTO Opcao (pergunta_id,letra,texto,is_correta) VALUES (%d,'%s','%s',%d)",
+                                                perguntaId, letra, texto.replace("'", "''"), correta ? 1 : 0
                                         );
                                         enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), querySql);
                                     }
-
-
                                     else if (msg.startsWith("RESPONDER")) {
                                         if (!sessao.autenticado || !"ESTUDANTE".equals(sessao.role)) {
                                             out.println("ERRO: PERMISSAO_NEGADA"); continue;
                                         }
                                         String[] p = msg.split(";");
-                                        int perguntaId = Integer.parseInt(p[1]);     // (antigo tinha estudanteId; agora não precisa)
+                                        int perguntaId = Integer.parseInt(p[1]);
                                         String letra = p[2];
 
                                         db.guardarResposta(sessao.estudanteId, perguntaId, letra);
                                         db.incrementarVersao();
                                         out.println("RESPOSTA_GUARDADA");
                                         String querySql = String.format(
-                                        "INSERT OR REPLACE INTO Resposta (estudante_id,pergunta_id,opcao_letra) VALUES (%d,%d,'%s')",
-                                        sessao.estudanteId, perguntaId, letra
+                                                "INSERT OR REPLACE INTO Resposta (estudante_id,pergunta_id,opcao_letra) VALUES (%d,%d,'%s')",
+                                                sessao.estudanteId, perguntaId, letra
                                         );
                                         enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), querySql);
                                     }
-
                                     else if (msg.startsWith("REGISTAR_DOCENTE")) {
-                                    String[] p = msg.split(";", 5);
-                                    if (p.length < 5) { out.println("ERRO:ARGS"); continue; }
-                                    String nome = p[1], email = p[2], pass = p[3], codigo = p[4];
+                                        String[] p = msg.split(";", 5);
+                                        if (p.length < 5) { out.println("ERRO:ARGS"); continue; }
+                                        String nome = p[1], email = p[2], pass = p[3], codigo = p[4];
 
-                                    try {
-                                        if (!db.validarCodigoDocente(codigo)) {
-                                            out.println("ERRO:CODIGO_DOCENTE_INVALIDO");
-                                            continue;
+                                        try {
+                                            if (!db.validarCodigoDocente(codigo)) {
+                                                out.println("ERRO:CODIGO_DOCENTE_INVALIDO");
+                                                continue;
+                                            }
+
+                                            int id = db.criarDocente(nome, email, pass);
+                                            db.incrementarVersao();
+                                            out.println("DOCENTE_CRIADO:" + id);
+
+                                            String passHash = servidor.db.DatabaseManager.hashPassword(pass);
+                                            String q = String.format(
+                                                    "INSERT INTO Docente (nome,email,password_hash) VALUES ('%s','%s','%s')",
+                                                    nome.replace("'", "''"), email.replace("'", "''"), passHash
+                                            );
+                                            enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), q);
+
+                                        } catch (SQLException e) {
+                                            String m = String.valueOf(e.getMessage());
+                                            if (m.contains("UNIQUE")) out.println("ERRO:EMAIL_DUPLICADO");
+                                            else out.println("ERRO:SQL");
+                                        }
+                                    }
+                                    else if (msg.startsWith("REGISTAR_ESTUDANTE")) {
+                                        String[] p = msg.split(";", 5);
+                                        if (p.length < 5) { out.println("ERRO:ARGS"); continue; }
+
+                                        try {
+                                            int numero = Integer.parseInt(p[1]);
+                                            String nome = p[2], email = p[3], pass = p[4];
+                                            int id = db.criarEstudante(numero, nome, email, pass);
+                                            db.incrementarVersao();
+                                            out.println("ESTUDANTE_CRIADO:" + id);
+
+                                            String passHash = servidor.db.DatabaseManager.hashPassword(pass);
+                                            String q = String.format(
+                                                    "INSERT INTO Estudante (numero,nome,email,password_hash) VALUES (%d,'%s','%s','%s')",
+                                                    numero, nome.replace("'", "''"), email.replace("'", "''"), passHash
+                                            );
+                                            enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), q);
+
+                                        } catch (NumberFormatException nfe) {
+                                            out.println("ERRO:NUMERO_INVALIDO");
+                                        } catch (SQLException e) {
+                                            String m = String.valueOf(e.getMessage());
+                                            if (m.contains("UNIQUE")) out.println("ERRO:EMAIL_OU_NUMERO_DUP");
+                                            else out.println("ERRO:SQL");
+                                        }
+                                    }
+
+                                    // ===== FASE 2: NOVAS FUNCIONALIDADES DO DOCENTE =====
+
+                                    else if (msg.startsWith("LISTAR_PERGUNTAS")) {
+                                        if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) {
+                                            out.println("ERRO: PERMISSAO_NEGADA"); continue;
                                         }
 
-                                        int id = db.criarDocente(nome, email, pass);
-                                        db.incrementarVersao();
-                                        out.println("DOCENTE_CRIADO:" + id);
+                                        String[] p = msg.split(";", 2);
+                                        String filtro = (p.length > 1 && !p[1].trim().isEmpty() && !"TODAS".equalsIgnoreCase(p[1])) ? p[1] : null;
 
-                                        String passHash = servidor.db.DatabaseManager.hashPassword(pass);
-                                        String q = String.format(
-                                            "INSERT INTO Docente (nome,email,password_hash) VALUES ('%s','%s','%s')",
-                                            nome.replace("'", "''"), email.replace("'", "''"), passHash
-                                        );
-                                        enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), q);
+                                        try {
+                                            var perguntas = db.listarPerguntas(sessao.docenteId, filtro);
 
-                                    } catch (SQLException e) {
-                                        String m = String.valueOf(e.getMessage());
-                                        if (m.contains("UNIQUE")) out.println("ERRO:EMAIL_DUPLICADO");
-                                        else out.println("ERRO:SQL");
+                                            if (perguntas.isEmpty()) {
+                                                out.println("INFO:NENHUMA_PERGUNTA_ENCONTRADA");
+                                            } else {
+                                                StringBuilder sb = new StringBuilder("PERGUNTAS_LISTA:" + perguntas.size());
+                                                for (var pg : perguntas) {
+                                                    sb.append("|").append(pg.id)
+                                                            .append(";").append(pg.enunciado)
+                                                            .append(";").append(pg.dataInicio)
+                                                            .append(";").append(pg.dataFim)
+                                                            .append(";").append(pg.codigoAcesso)
+                                                            .append(";").append(pg.estado)
+                                                            .append(";").append(pg.numRespostas);
+                                                }
+                                                out.println(sb.toString());
+                                            }
+                                        } catch (SQLException e) {
+                                            out.println("ERRO:SQL:" + e.getMessage());
+                                        }
                                     }
-                                }
 
-                                else if (msg.startsWith("REGISTAR_ESTUDANTE")) {
-                                    String[] p = msg.split(";", 5);
-                                    if (p.length < 5) { out.println("ERRO:ARGS"); continue; }
+                                    else if (msg.startsWith("EDITAR_PERGUNTA")) {
+                                        if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) {
+                                            out.println("ERRO: PERMISSAO_NEGADA"); continue;
+                                        }
 
-                                    try {
-                                        int numero = Integer.parseInt(p[1]);
-                                        String nome = p[2], email = p[3], pass = p[4];
-                                        int id = db.criarEstudante(numero, nome, email, pass);
-                                        db.incrementarVersao();
-                                        out.println("ESTUDANTE_CRIADO:" + id);
+                                        String[] p = msg.split(";", 5);
+                                        if (p.length < 5) { out.println("ERRO:ARGS"); continue; }
 
-                                        String passHash = servidor.db.DatabaseManager.hashPassword(pass);
-                                        String q = String.format(
-                                            "INSERT INTO Estudante (numero,nome,email,password_hash) VALUES (%d,'%s','%s','%s')",
-                                            numero, nome.replace("'", "''"), email.replace("'", "''"), passHash
-                                        );
-                                        enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), q);
+                                        try {
+                                            int perguntaId = Integer.parseInt(p[1]);
+                                            String novoEnunciado = p[2];
+                                            String novoInicio = p[3];
+                                            String novoFim = p[4];
 
-                                    } catch (NumberFormatException nfe) {
-                                        out.println("ERRO:NUMERO_INVALIDO");
-                                    } catch (SQLException e) {
-                                        String m = String.valueOf(e.getMessage());
-                                        if (m.contains("UNIQUE")) out.println("ERRO:EMAIL_OU_NUMERO_DUP");
-                                        else out.println("ERRO:SQL");
+                                            if (!db.perguntaPertenceADocente(perguntaId, sessao.docenteId)) {
+                                                out.println("ERRO:NAO_PERTENCE");
+                                                continue;
+                                            }
+
+                                            db.editarPergunta(perguntaId, novoEnunciado, novoInicio, novoFim);
+                                            db.incrementarVersao();
+                                            out.println("PERGUNTA_EDITADA");
+
+                                            String querySql = String.format(
+                                                    "UPDATE Pergunta SET enunciado='%s', data_inicio='%s', data_fim='%s' WHERE id=%d",
+                                                    novoEnunciado.replace("'", "''"), novoInicio, novoFim, perguntaId
+                                            );
+                                            enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), querySql);
+
+                                        } catch (NumberFormatException nfe) {
+                                            out.println("ERRO:ID_INVALIDO");
+                                        } catch (SQLException e) {
+                                            if (e.getMessage().contains("já tem respostas")) {
+                                                out.println("ERRO:TEM_RESPOSTAS");
+                                            } else {
+                                                out.println("ERRO:SQL:" + e.getMessage());
+                                            }
+                                        }
                                     }
-                                }
 
+                                    else if (msg.startsWith("ELIMINAR_PERGUNTA")) {
+                                        if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) {
+                                            out.println("ERRO: PERMISSAO_NEGADA"); continue;
+                                        }
+
+                                        String[] p = msg.split(";", 2);
+                                        if (p.length < 2) { out.println("ERRO:ARGS"); continue; }
+
+                                        try {
+                                            int perguntaId = Integer.parseInt(p[1]);
+
+                                            if (!db.perguntaPertenceADocente(perguntaId, sessao.docenteId)) {
+                                                out.println("ERRO:NAO_PERTENCE");
+                                                continue;
+                                            }
+
+                                            db.eliminarPergunta(perguntaId);
+                                            db.incrementarVersao();
+                                            out.println("PERGUNTA_ELIMINADA");
+
+                                            String querySql1 = String.format("DELETE FROM Opcao WHERE pergunta_id=%d", perguntaId);
+                                            String querySql2 = String.format("DELETE FROM Pergunta WHERE id=%d", perguntaId);
+
+                                            enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), querySql1 + ";" + querySql2);
+
+                                        } catch (NumberFormatException nfe) {
+                                            out.println("ERRO:ID_INVALIDO");
+                                        } catch (SQLException e) {
+                                            if (e.getMessage().contains("já tem respostas")) {
+                                                out.println("ERRO:TEM_RESPOSTAS");
+                                            } else {
+                                                out.println("ERRO:SQL:" + e.getMessage());
+                                            }
+                                        }
+                                    }
+
+                                    else if (msg.startsWith("VER_RESULTADOS")) {
+                                        if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) {
+                                            out.println("ERRO: PERMISSAO_NEGADA"); continue;
+                                        }
+
+                                        String[] p = msg.split(";", 2);
+                                        if (p.length < 2) { out.println("ERRO:ARGS"); continue; }
+
+                                        try {
+                                            int perguntaId = Integer.parseInt(p[1]);
+
+                                            PerguntaDetalhes pd = db.obterDetalhesPerguntaExpirada(perguntaId, sessao.docenteId);
+
+                                            StringBuilder sb = new StringBuilder("RESULTADOS:");
+
+                                            sb.append(pd.id).append(";")
+                                                    .append(pd.enunciado).append(";")
+                                                    .append(pd.dataInicio).append(";")
+                                                    .append(pd.dataFim).append(";")
+                                                    .append(pd.codigoAcesso).append(";")
+                                                    .append(pd.numRespostas);
+
+                                            sb.append("|OPCOES:").append(pd.opcoes.size());
+                                            for (var op : pd.opcoes) {
+                                                sb.append("|").append(op.letra)
+                                                        .append(";").append(op.texto)
+                                                        .append(";").append(op.isCorreta ? "1" : "0")
+                                                        .append(";").append(op.numRespostas);
+                                            }
+
+                                            sb.append("|RESPOSTAS:").append(pd.respostas.size());
+                                            for (var resp : pd.respostas) {
+                                                sb.append("|").append(resp.estudanteNumero)
+                                                        .append(";").append(resp.estudanteNome)
+                                                        .append(";").append(resp.estudanteEmail)
+                                                        .append(";").append(resp.opcaoLetra)
+                                                        .append(";").append(resp.estaCorreta ? "CERTA" : "ERRADA")
+                                                        .append(";").append(resp.dataHora);
+                                            }
+
+                                            out.println(sb.toString());
+
+                                        } catch (NumberFormatException nfe) {
+                                            out.println("ERRO:ID_INVALIDO");
+                                        } catch (SQLException e) {
+                                            if (e.getMessage().contains("não pertence")) {
+                                                out.println("ERRO:NAO_PERTENCE");
+                                            } else if (e.getMessage().contains("não expirou")) {
+                                                out.println("ERRO:NAO_EXPIRADA");
+                                            } else {
+                                                out.println("ERRO:SQL:" + e.getMessage());
+                                            }
+                                        }
+                                    }
+
+                                    else if (msg.startsWith("EXPORTAR_CSV")) {
+                                        if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) {
+                                            out.println("ERRO: PERMISSAO_NEGADA"); continue;
+                                        }
+
+                                        String[] p = msg.split(";", 2);
+                                        if (p.length < 2) { out.println("ERRO:ARGS"); continue; }
+
+                                        try {
+                                            int perguntaId = Integer.parseInt(p[1]);
+
+                                            String csv = db.exportarParaCSV(perguntaId, sessao.docenteId);
+
+                                            String csvBase64 = java.util.Base64.getEncoder().encodeToString(csv.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                                            out.println("CSV_EXPORTADO:" + csvBase64);
+
+                                        } catch (NumberFormatException nfe) {
+                                            out.println("ERRO:ID_INVALIDO");
+                                        } catch (SQLException e) {
+                                            if (e.getMessage().contains("não pertence")) {
+                                                out.println("ERRO:NAO_PERTENCE");
+                                            } else if (e.getMessage().contains("não expirou")) {
+                                                out.println("ERRO:NAO_EXPIRADA");
+                                            } else {
+                                                out.println("ERRO:SQL:" + e.getMessage());
+                                            }
+                                        }
+                                    }
 
                                     else {
                                         out.println("COMANDO_DESCONHECIDO");
@@ -398,10 +567,8 @@ public class Main {
         System.out.println("[Servidor] Servidor totalmente operacional! (UDP + TCP + DB + MULTICAST)");
     }
 
-    // ===== FUNÇÃO AUXILIAR: Enviar heartbeat com query SQL =====
     private static void enviarHeartbeatComQuery(DatagramSocket socket, InetAddress grupoMulticast, int versao, String querySql) {
         try {
-            // Formato: HEARTBEAT_UPDATE:versao:portoClientes:portoSync:QUERY:querySQL
             String hbMsg = "HEARTBEAT_UPDATE:" + versao + ":" + portoTCPClientes + ":" + portoTCPSync + ":QUERY:" + querySql;
             byte[] hbBytes = hbMsg.getBytes();
 
@@ -419,11 +586,9 @@ public class Main {
         }
     }
 
-    // ===== FUNÇÃO: Processar heartbeat recebido via multicast =====
     private static void processarHeartbeatMulticast(String mensagem, DatabaseManager db) {
         try {
             if (mensagem.startsWith("HEARTBEAT_UPDATE:")) {
-                // Formato: HEARTBEAT_UPDATE:versao:portoClientes:portoSync:QUERY:querySQL
                 String[] partes = mensagem.split(":", 6);
 
                 if (partes.length < 6) {
@@ -438,14 +603,12 @@ public class Main {
 
                 System.out.println("[Multicast] Update recebido - Versão recebida: " + versaoRecebida + " | Versão local: " + versaoLocal);
 
-                // Verificar se a versão está correta (local + 1)
                 if (versaoRecebida != versaoLocal + 1) {
                     System.err.println("[Multicast] PERDA DE SINCRONIZAÇÃO! Esperava versão " + (versaoLocal + 1) + ", recebi " + versaoRecebida);
                     System.err.println("[Multicast] Servidor vai terminar!");
                     System.exit(1);
                 }
 
-                // Executar a query na base de dados local
                 try {
                     db.executarQuery(query);
                     db.incrementarVersao();
@@ -460,7 +623,6 @@ public class Main {
                 }
 
             } else if (mensagem.startsWith("HEARTBEAT:")) {
-                // Heartbeat normal (sem query) - apenas verificar versão
                 String[] partes = mensagem.split(":");
 
                 if (partes.length < 4) {
@@ -482,7 +644,7 @@ public class Main {
             e.printStackTrace();
         }
     }
-    // ===== HELPER: verifica se um IP pertence a esta máquina =====
+
     private static boolean isLocalAddress(String host) {
         try {
             InetAddress addr = InetAddress.getByName(host);
@@ -499,15 +661,13 @@ public class Main {
         return false;
     }
 
-
-     private static int getEstudanteId(DatabaseManager db, String email) throws SQLException {
+    private static int getEstudanteId(DatabaseManager db, String email) throws SQLException {
         try (PreparedStatement ps = db.getConnection()
-            .prepareStatement("SELECT id FROM Estudante WHERE email=?")) {
+                .prepareStatement("SELECT id FROM Estudante WHERE email=?")) {
             ps.setString(1, email);
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next() ? rs.getInt(1) : -1;
             }
         }
-}
-
+    }
 }
