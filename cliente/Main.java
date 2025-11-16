@@ -74,13 +74,16 @@ public class Main {
                                     break;
                                 }
                                 case "5": { // Responder
-                                    System.out.print("Estudante ID: ");  String estId = sc.nextLine().trim();
-                                    System.out.print("Pergunta ID: ");    String pid   = sc.nextLine().trim();
-                                    System.out.print("Letra (a/b/c): ");  String letra = sc.nextLine().trim();
-                                    if (!letra.isEmpty()) letra = letra.substring(0,1).toLowerCase();
-                                    wire = "RESPONDER;" + estId + ";" + pid + ";" + letra;
+                                    System.out.print("Pergunta ID: ");
+                                    String pid = sc.nextLine().trim();
+                                    System.out.print("Letra (a/b/c): ");
+                                    String letra = sc.nextLine().trim();
+                                    if (!letra.isEmpty())
+                                        letra = letra.substring(0, 1).toLowerCase();
+                                    wire = "RESPONDER;" + pid + ";" + letra;
                                     break;
                                 }
+
                                 case "6": { // Registar docente
                                     System.out.print("Nome: ");        String nome = sc.nextLine().trim();
                                     System.out.print("Email: ");       String email = sc.nextLine().trim();

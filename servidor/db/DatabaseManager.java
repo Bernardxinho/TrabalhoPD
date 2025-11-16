@@ -390,16 +390,20 @@ public class DatabaseManager {
 
         java.util.List<PerguntaDetalhes> lista = new java.util.ArrayList<>();
 
-        String sql = "SELECT p.id, p.enunciado, p.data_inicio, p.data_fim, p.codigo_acesso, " +
-                "p.docente_id, p.data_criacao, " +
-                "(SELECT COUNT(*) FROM Resposta r WHERE r.pergunta_id = p.id) as num_respostas " +
-                "FROM Pergunta p WHERE p.docente_id = ? ";
+        String sql =
+                "SELECT p.id, p.enunciado, p.data_inicio, p.data_fim, p.codigo_acesso, " +
+                        "       p.docente_id, p.data_criacao, " +
+                        "       (SELECT COUNT(*) FROM Resposta r WHERE r.pergunta_id = p.id) AS num_respostas, " +
+                        "       (SELECT COUNT(*) FROM Opcao   o WHERE o.pergunta_id = p.id) AS num_opcoes " +
+                        "FROM Pergunta p WHERE p.docente_id = ? ";
 
         // Filtro de estado baseado em datetime('now')
         if (filtroEstado != null) {
             switch (filtroEstado.toUpperCase()) {
                 case "ATIVA":
-                    sql += "AND datetime('now') BETWEEN p.data_inicio AND p.data_fim ";
+                    // só entram ATIVAS COM >= 2 opções
+                    sql += "AND datetime('now') BETWEEN p.data_inicio AND p.data_fim " +
+                            "AND (SELECT COUNT(*) FROM Opcao o WHERE o.pergunta_id = p.id) >= 2 ";
                     break;
                 case "FUTURA":
                     sql += "AND datetime('now') < p.data_inicio ";
@@ -417,26 +421,32 @@ public class DatabaseManager {
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     PerguntaDetalhes pd = new PerguntaDetalhes();
-                    pd.id = rs.getInt("id");
-                    pd.enunciado = rs.getString("enunciado");
-                    pd.dataInicio = rs.getString("data_inicio");
-                    pd.dataFim = rs.getString("data_fim");
+                    pd.id           = rs.getInt("id");
+                    pd.enunciado    = rs.getString("enunciado");
+                    pd.dataInicio   = rs.getString("data_inicio");
+                    pd.dataFim      = rs.getString("data_fim");
                     pd.codigoAcesso = rs.getString("codigo_acesso");
-                    pd.docenteId = rs.getInt("docente_id");
-                    pd.dataCriacao = rs.getString("data_criacao");
+                    pd.docenteId    = rs.getInt("docente_id");
+                    pd.dataCriacao  = rs.getString("data_criacao");
                     pd.numRespostas = rs.getInt("num_respostas");
+                    int numOpcoes   = rs.getInt("num_opcoes");
 
-                    // Determinar estado
+                    // Determinar estado pela data
                     String sqlEstado = "SELECT CASE " +
                             "WHEN datetime('now') < ? THEN 'FUTURA' " +
                             "WHEN datetime('now') > ? THEN 'EXPIRADA' " +
-                            "ELSE 'ATIVA' END as estado";
+                            "ELSE 'ATIVA' END AS estado";
                     try (PreparedStatement psEstado = connection.prepareStatement(sqlEstado)) {
                         psEstado.setString(1, pd.dataInicio);
                         psEstado.setString(2, pd.dataFim);
                         try (ResultSet rsEstado = psEstado.executeQuery()) {
                             pd.estado = rsEstado.next() ? rsEstado.getString("estado") : "DESCONHECIDO";
                         }
+                    }
+
+                    // Regra do enunciado: mínimo 2 opções para ser realmente ATIVA
+                    if ("ATIVA".equals(pd.estado) && numOpcoes < 2) {
+                        pd.estado = "FUTURA";
                     }
 
                     lista.add(pd);
