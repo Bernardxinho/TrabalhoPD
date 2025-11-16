@@ -397,11 +397,9 @@ public class DatabaseManager {
                         "       (SELECT COUNT(*) FROM Opcao   o WHERE o.pergunta_id = p.id) AS num_opcoes " +
                         "FROM Pergunta p WHERE p.docente_id = ? ";
 
-        // Filtro de estado baseado em datetime('now')
         if (filtroEstado != null) {
             switch (filtroEstado.toUpperCase()) {
                 case "ATIVA":
-                    // só entram ATIVAS COM >= 2 opções
                     sql += "AND datetime('now') BETWEEN p.data_inicio AND p.data_fim " +
                             "AND (SELECT COUNT(*) FROM Opcao o WHERE o.pergunta_id = p.id) >= 2 ";
                     break;
@@ -431,7 +429,6 @@ public class DatabaseManager {
                     pd.numRespostas = rs.getInt("num_respostas");
                     int numOpcoes   = rs.getInt("num_opcoes");
 
-                    // Determinar estado pela data
                     String sqlEstado = "SELECT CASE " +
                             "WHEN datetime('now') < ? THEN 'FUTURA' " +
                             "WHEN datetime('now') > ? THEN 'EXPIRADA' " +
@@ -444,7 +441,6 @@ public class DatabaseManager {
                         }
                     }
 
-                    // Regra do enunciado: mínimo 2 opções para ser realmente ATIVA
                     if ("ATIVA".equals(pd.estado) && numOpcoes < 2) {
                         pd.estado = "FUTURA";
                     }

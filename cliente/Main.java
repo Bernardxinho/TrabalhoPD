@@ -198,8 +198,15 @@ public class Main {
                                     }
                                 }
                                 // VER_RESULTADOS - resposta complexa
+                                // VER_RESULTADOS - resposta complexa
                                 else if (wire.startsWith("VER_RESULTADOS") && resp.startsWith("RESULTADOS:")) {
-                                    String[] blocos = resp.substring(11).split("\\|");
+                                    String payload = resp.substring("RESULTADOS:".length());
+                                    String[] blocos = payload.split("\\|");
+
+                                    if (blocos.length == 0) {
+                                        System.out.println("[Cliente] Resposta de resultados vazia.");
+                                        continue;
+                                    }
 
                                     // Bloco 0: info pergunta
                                     String[] infoPerg = blocos[0].split(";");
@@ -211,14 +218,20 @@ public class Main {
                                     System.out.println("Código: " + infoPerg[4]);
                                     System.out.println("Total de respostas: " + infoPerg[5] + "\n");
 
-                                    // Bloco 1: OPCOES
-                                    if (blocos.length > 1 && blocos[1].startsWith("OPCOES:")) {
-                                        String[] opcoesData = blocos[1].split("\\|");
-                                        int numOpcoes = Integer.parseInt(opcoesData[0].substring(7));
+                                    int idx = 1;
+
+                                    // ─── OPÇÕES ───
+                                    if (idx < blocos.length && blocos[idx].startsWith("OPCOES:")) {
+                                        int numOpcoes = 0;
+                                        try {
+                                            numOpcoes = Integer.parseInt(blocos[idx].substring("OPCOES:".length()));
+                                        } catch (NumberFormatException ignore) {}
+                                        idx++;
 
                                         System.out.println("─── OPÇÕES ───");
-                                        for (int i = 1; i <= numOpcoes && (i) < opcoesData.length; i++) {
-                                            String[] opcao = opcoesData[i].split(";");
+                                        for (int i = 0; i < numOpcoes && idx < blocos.length; i++, idx++) {
+                                            String[] opcao = blocos[idx].split(";", 4);
+                                            if (opcao.length < 4) continue;
                                             String correta = "1".equals(opcao[2]) ? " [CORRETA]" : "";
                                             System.out.printf("  %s) %s%s (escolhida por %s estudante(s))\n",
                                                     opcao[0], opcao[1], correta, opcao[3]);
@@ -226,15 +239,19 @@ public class Main {
                                         System.out.println();
                                     }
 
-                                    // Bloco 2: RESPOSTAS
-                                    if (blocos.length > 2 && blocos[2].startsWith("RESPOSTAS:")) {
-                                        String[] respostasData = blocos[2].split("\\|");
-                                        int numResp = Integer.parseInt(respostasData[0].substring(10));
+                                    // ─── RESPOSTAS ───
+                                    if (idx < blocos.length && blocos[idx].startsWith("RESPOSTAS:")) {
+                                        int numResp = 0;
+                                        try {
+                                            numResp = Integer.parseInt(blocos[idx].substring("RESPOSTAS:".length()));
+                                        } catch (NumberFormatException ignore) {}
+                                        idx++;
 
                                         System.out.println("─── RESPOSTAS DOS ESTUDANTES ───");
                                         int certas = 0;
-                                        for (int i = 1; i <= numResp && (i) < respostasData.length; i++) {
-                                            String[] r = respostasData[i].split(";");
+                                        for (int i = 0; i < numResp && idx < blocos.length; i++, idx++) {
+                                            String[] r = blocos[idx].split(";", 6);
+                                            if (r.length < 6) continue;
                                             System.out.printf("  %s | %s (%s)\n    Resposta: %s - %s\n    Data/Hora: %s\n\n",
                                                     r[0], r[1], r[2], r[3], r[4], r[5]);
                                             if ("CERTA".equals(r[4])) certas++;
@@ -247,6 +264,7 @@ public class Main {
                                         }
                                     }
                                 }
+
                                 // EXPORTAR_CSV - guardar ficheiro
                                 else if (wire.startsWith("EXPORTAR_CSV") && resp.startsWith("CSV_EXPORTADO:")) {
                                     String csvBase64 = resp.substring(14);
