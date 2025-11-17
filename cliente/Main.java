@@ -166,6 +166,22 @@ public class Main {
                                     break;
                                 }
 
+                                case "15": { // Editar dados pessoais (estudante)
+                                    System.out.print("Novo nome: ");
+                                    String nome = sc.nextLine().trim();
+                                    System.out.print("Novo email: ");
+                                    String email = sc.nextLine().trim();
+                                    System.out.print("Nova password: ");
+                                    String pass = sc.nextLine().trim();
+                                    wire = "EDITAR_ESTUDANTE;" + nome + ";" + email + ";" + pass;
+                                    break;
+                                }
+
+                                case "16": { // Ver perguntas respondidas (estudante)
+                                    wire = "LISTAR_RESPOSTAS_ESTUDANTE";
+                                    break;
+                                }
+
                                 case "14": { // Logout
                                     wire = "LOGOUT";
                                     break;
@@ -324,6 +340,38 @@ public class Main {
                                     }
                                 }
 
+                                else if (wire.startsWith("LISTAR_RESPOSTAS_ESTUDANTE") &&
+                                        resp.startsWith("RESPOSTAS_ESTUDANTE:")) {
+
+                                    String payload = resp.substring("RESPOSTAS_ESTUDANTE:".length());
+                                    String[] partes = payload.split("\\|");
+                                    int count = Integer.parseInt(partes[0]);
+
+                                    System.out.println("\n╔════════════════════════════════════════════════════════════╗");
+                                    System.out.println("║      PERGUNTAS RESPONDIDAS (EXPIRADAS) - " + count + " registo(s)      ║");
+                                    System.out.println("╚════════════════════════════════════════════════════════════╝\n");
+
+                                    for (int i = 1; i < partes.length; i++) {
+                                        String[] campos = partes[i].split(";", 6);
+                                        if (campos.length < 6) continue;
+
+                                        String pid         = campos[0];
+                                        String enunciado   = campos[1];
+                                        String dataFim     = campos[2];
+                                        String dataResp    = campos[3];
+                                        String letra       = campos[4];
+                                        String estadoResp  = campos[5]; // CERTA / ERRADA
+
+                                        System.out.printf("┌─ Pergunta #%s ─────────────────────────────────────\n", pid);
+                                        System.out.printf("│ Enunciado: %s\n", enunciado);
+                                        System.out.printf("│ Data fim:  %s\n", dataFim);
+                                        System.out.printf("│ Respondida: %s\n", dataResp);
+                                        System.out.printf("│ Sua resposta: %s (%s)\n", letra, estadoResp);
+                                        System.out.println("└─────────────────────────────────────────────────────\n");
+                                    }
+                                }
+
+
                                 // EXPORTAR_CSV - guardar ficheiro
                                 else if (wire.startsWith("EXPORTAR_CSV") && resp.startsWith("CSV_EXPORTADO:")) {
                                     String csvBase64 = resp.substring(14);
@@ -417,8 +465,10 @@ public class Main {
         System.out.println(" 10) Eliminar pergunta");
         System.out.println(" 11) Ver resultados de pergunta expirada");
         System.out.println(" 12) Exportar resultados para CSV");
-        System.out.println(" 13) Editar dados pessoais (docente)");
+        System.out.println(" 13) Editar dados pessoais docente");
         System.out.println(" 14) Logout");
+        System.out.println(" 15) Editar dados pessoais estudante");
+        System.out.println(" 16) Ver perguntas respondidas (estudante)");
         System.out.println("\n  0) Sair");
     }
 }

@@ -306,7 +306,7 @@ public class DatabaseManager {
         if (connection == null || connection.isClosed()) {
             connect();
         }
-        String sql = "INSERT OR REPLACE INTO Resposta (estudante_id, pergunta_id, opcao_letra) VALUES (?, ?, ?)";
+        String sql = "INSERT INTO Resposta (estudante_id, pergunta_id, opcao_letra) VALUES (?, ?, ?)";
         PreparedStatement ps = connection.prepareStatement(sql);
         ps.setInt(1, estudanteId);
         ps.setInt(2, perguntaId);
@@ -730,6 +730,63 @@ public class DatabaseManager {
         }
 
         return pd;
+    }
+
+    // perto das outras classes internas (ex.: PerguntaDetalhes, etc.)
+    public static class RespostaEstudanteInfo {
+        public int perguntaId;
+        public String enunciado;
+        public String dataFim;
+        public String dataResposta;
+        public String letra;
+        public boolean correta;
+    }
+
+    public void atualizarEstudantePerfil(int estudanteId, String novoNome, String novoEmail, String novaPass) throws SQLException {
+        String sql = "UPDATE Estudante SET nome=?, email=?, password_hash=? WHERE id=?";
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
+            ps.setString(1, novoNome);
+            ps.setString(2, novoEmail);
+            ps.setString(3, hashPassword(novaPass));
+            ps.setInt(4, estudanteId);
+            ps.executeUpdate();
+        }
+    }
+
+    public java.util.List<RespostaEstudanteInfo> listarRespostasEstudanteExpiradas(int estudanteId) throws SQLException {
+        java.util.List<RespostaEstudanteInfo> lista = new java.util.ArrayList<>();
+
+        String sql =
+                "SELECT p.id            AS pergunta_id, " +
+                        "       p.enunciado     AS enunciado, " +
+                        "       p.data_fim      AS data_fim, " +
+                        "       r.data_hora     AS data_hora, " +
+                        "       r.opcao_letra   AS opcao_letra, " +
+                        "       COALESCE(o.is_correta,0) AS correta " +
+                        "FROM   Resposta r " +
+                        "JOIN   Pergunta p ON p.id = r.pergunta_id " +
+                        "LEFT JOIN Opcao o ON o.pergunta_id = r.pergunta_id AND o.letra = r.opcao_letra " +
+                        "WHERE  r.estudante_id = ? " +
+                        "  AND  p.data_fim < datetime('now') " +
+                        "ORDER BY p.data_fim DESC, r.data_hora DESC";
+
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
+            ps.setInt(1, estudanteId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    RespostaEstudanteInfo info = new RespostaEstudanteInfo();
+                    info.perguntaId   = rs.getInt("pergunta_id");
+                    info.enunciado    = rs.getString("enunciado");
+                    info.dataFim      = rs.getString("data_fim");
+                    info.dataResposta = rs.getString("data_hora");
+                    info.letra        = rs.getString("opcao_letra");
+                    info.correta      = rs.getInt("correta") == 1;
+                    lista.add(info);
+                }
+            }
+        }
+
+        return lista;
     }
 
     /**

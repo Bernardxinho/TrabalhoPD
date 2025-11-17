@@ -264,21 +264,49 @@ public class Main {
                                     }
                                     else if (msg.startsWith("RESPONDER")) {
                                         if (!sessao.autenticado || !"ESTUDANTE".equals(sessao.role)) {
-                                            out.println("ERRO: PERMISSAO_NEGADA"); continue;
+                                            out.println("ERRO: PERMISSAO_NEGADA");
+                                            continue;
                                         }
+
                                         String[] p = msg.split(";");
-                                        int perguntaId = Integer.parseInt(p[1]);
+                                        if (p.length < 3) {
+                                            out.println("ERRO:ARGS");
+                                            continue;
+                                        }
+
+                                        int perguntaId;
+                                        try {
+                                            perguntaId = Integer.parseInt(p[1]);
+                                        } catch (NumberFormatException nfe) {
+                                            out.println("ERRO:ID_INVALIDO");
+                                            continue;
+                                        }
+
                                         String letra = p[2];
 
-                                        db.guardarResposta(sessao.estudanteId, perguntaId, letra);
-                                        db.incrementarVersao();
-                                        out.println("RESPOSTA_GUARDADA");
-                                        String querySql = String.format(
-                                                "INSERT OR REPLACE INTO Resposta (estudante_id,pergunta_id,opcao_letra) VALUES (%d,%d,'%s')",
-                                                sessao.estudanteId, perguntaId, letra
-                                        );
-                                        enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), querySql);
+                                        try {
+                                            // grava no principal
+                                            db.guardarResposta(sessao.estudanteId, perguntaId, letra);
+                                            db.incrementarVersao();
+                                            out.println("RESPOSTA_GUARDADA");
+
+                                            // manda query para réplicas (sem OR REPLACE)
+                                            String querySql = String.format(
+                                                    "INSERT INTO Resposta (estudante_id,pergunta_id,opcao_letra) VALUES (%d,%d,'%s')",
+                                                    sessao.estudanteId, perguntaId, letra
+                                            );
+                                            enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), querySql);
+
+                                        } catch (java.sql.SQLException e) {
+                                            String m = e.getMessage() != null ? e.getMessage() : "";
+                                            if (m.contains("UNIQUE")) {
+                                                out.println("ERRO:JA_RESPONDEU");
+                                            } else {
+                                                out.println("ERRO:SQL");
+                                            }
+                                        }
                                     }
+
                                     else if (msg.startsWith("OBTER_PERGUNTA_CODIGO")) {
                                         if (!sessao.autenticado || !"ESTUDANTE".equals(sessao.role)) {
                                             out.println("ERRO: PERMISSAO_NEGADA");
@@ -419,6 +447,48 @@ public class Main {
                                             if (m.contains("UNIQUE")) out.println("ERRO:EMAIL_DUPLICADO");
                                             else out.println("ERRO:SQL");
                                         }
+                                    }
+
+                                    else if (msg.startsWith("EDITAR_ESTUDANTE")) {
+                                        if (!sessao.autenticado || !"ESTUDANTE".equals(sessao.role)) {
+                                            out.println("ERRO: PERMISSAO_NEGADA");
+                                            continue;
+                                        }
+
+                                        String[] p = msg.split(";", 4);
+                                        if (p.length < 4) {
+                                            out.println("ERRO:ARGS");
+                                            continue;
+                                        }
+
+                                        String novoNome  = p[1];
+                                        String novoEmail = p[2];
+                                        String novaPass  = p[3];
+
+                                        try {
+                                            db.atualizarEstudantePerfil(sessao.estudanteId, novoNome, novoEmail, novaPass);
+                                            db.incrementarVersao();
+                                            out.println("ESTUDANTE_ATUALIZADO");
+
+                                            String passHash = servidor.db.DatabaseManager.hashPassword(novaPass);
+                                            String q = String.format(
+                                                    "UPDATE Estudante SET nome='%s', email='%s', password_hash='%s' WHERE id=%d",
+                                                    novoNome.replace("'", "''"),
+                                                    novoEmail.replace("'", "''"),
+                                                    passHash,
+                                                    sessao.estudanteId
+                                            );
+                                            enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), q);
+
+                                        } catch (java.sql.SQLException e) {
+                                            String m = e.getMessage() != null ? e.getMessage() : "";
+                                            if (m.contains("UNIQUE")) {
+                                                out.println("ERRO:EMAIL_DUPLICADO");
+                                            } else {
+                                                out.println("ERRO:SQL");
+                                            }
+                                        }
+
                                     }
 
                                     // ===== FASE 2: NOVAS FUNCIONALIDADES DO DOCENTE =====
@@ -613,6 +683,35 @@ public class Main {
                                             }
                                         }
                                     }
+                                    else if (msg.startsWith("LISTAR_RESPOSTAS_ESTUDANTE")) {
+                                        if (!sessao.autenticado || !"ESTUDANTE".equals(sessao.role)) {
+                                            out.println("ERRO: PERMISSAO_NEGADA");
+                                            continue;
+                                        }
+
+                                        try {
+                                            var lista = db.listarRespostasEstudanteExpiradas(sessao.estudanteId);
+
+                                            if (lista.isEmpty()) {
+                                                out.println("INFO:NENHUMA_RESPOSTA");
+                                            } else {
+                                                StringBuilder sb = new StringBuilder("RESPOSTAS_ESTUDANTE:" + lista.size());
+                                                for (var rInfo : lista) {
+                                                    sb.append("|")
+                                                            .append(rInfo.perguntaId).append(";")
+                                                            .append(rInfo.enunciado).append(";")
+                                                            .append(rInfo.dataFim).append(";")
+                                                            .append(rInfo.dataResposta).append(";")
+                                                            .append(rInfo.letra).append(";")
+                                                            .append(rInfo.correta ? "CERTA" : "ERRADA");
+                                                }
+                                                out.println(sb.toString());
+                                            }
+                                        } catch (java.sql.SQLException e) {
+                                            out.println("ERRO:SQL:" + e.getMessage());
+                                        }
+                                    }
+
                                     else if ("LOGOUT".equals(msg)) {
                                         sessao.autenticado = false;
                                         sessao.role = null;
