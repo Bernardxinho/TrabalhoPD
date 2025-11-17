@@ -73,14 +73,10 @@ public class Main {
                                     wire = "ADICIONAR_OPCAO;" + pid + ";" + letra + ";" + txt + ";" + ok;
                                     break;
                                 }
-                                case "5": { // Responder
-                                    System.out.print("Pergunta ID: ");
-                                    String pid = sc.nextLine().trim();
-                                    System.out.print("Letra (a/b/c): ");
-                                    String letra = sc.nextLine().trim();
-                                    if (!letra.isEmpty())
-                                        letra = letra.substring(0, 1).toLowerCase();
-                                    wire = "RESPONDER;" + pid + ";" + letra;
+                                case "5": { // Responder (estudante, por código)
+                                    System.out.print("Código da pergunta: ");
+                                    String codigo = sc.nextLine().trim();
+                                    wire = "OBTER_PERGUNTA_CODIGO;" + codigo;
                                     break;
                                 }
 
@@ -188,6 +184,54 @@ public class Main {
                                     System.out.println("[Cliente] Ligação fechada pelo servidor.");
                                     break;
                                 }
+                                // Fluxo especial: estudante responde por CÓDIGO
+                                if (wire.startsWith("OBTER_PERGUNTA_CODIGO") &&
+                                        resp.startsWith("PERGUNTA_PARA_RESPONDER:")) {
+
+                                    String dados = resp.substring("PERGUNTA_PARA_RESPONDER:".length());
+                                    String[] blocos = dados.split("\\|");
+
+                                    String[] cab = blocos[0].split(";");
+                                    String pid        = cab[0];
+                                    String enunciado  = cab[1];
+                                    String dataIni    = cab[2];
+                                    String dataFim    = cab[3];
+                                    String codigo     = cab[4];
+
+                                    System.out.println("\nPergunta #" + pid + " (código " + codigo + ")");
+                                    System.out.println("Enunciado: " + enunciado);
+                                    System.out.println("Período: " + dataIni + " até " + dataFim);
+                                    System.out.println("\nOpções:");
+
+                                    int idx = 1;
+                                    if (idx < blocos.length && blocos[idx].startsWith("OPCOES:")) {
+                                        int numOpcoes = Integer.parseInt(blocos[idx].substring("OPCOES:".length()));
+                                        idx++;
+
+                                        for (int i = 0; i < numOpcoes && idx < blocos.length; i++, idx++) {
+                                            String[] oc = blocos[idx].split(";", 2);
+                                            System.out.println("  " + oc[0] + ") " + oc[1]);
+                                        }
+                                    }
+
+                                    System.out.print("\nLetra da opção: ");
+                                    String letra = sc.nextLine().trim();
+                                    if (!letra.isEmpty())
+                                        letra = letra.substring(0, 1).toLowerCase();
+
+                                    String wire2 = "RESPONDER;" + pid + ";" + letra;
+                                    out.println(wire2);
+                                    String resp2 = lerLinhaComTimeout(in);
+                                    if (resp2 == null) {
+                                        System.out.println("[Cliente] Ligação fechada pelo servidor.");
+                                        break;
+                                    }
+                                    System.out.println("[Cliente] " + resp2);
+
+                                    // não deixar cair nos outros ifs
+                                    continue;
+                                }
+
 
                                 // ===== TRATAMENTO ESPECIAL PARA RESPOSTAS FASE 2 =====
 

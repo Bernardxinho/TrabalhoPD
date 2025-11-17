@@ -676,6 +676,62 @@ public class DatabaseManager {
         return pd;
     }
 
+    public synchronized PerguntaDetalhes obterPerguntaAtivaPorCodigo(String codigo) throws SQLException {
+        if (connection == null || connection.isClosed()) connect();
+
+        PerguntaDetalhes pd = null;
+
+        String sqlPergunta = "SELECT * FROM Pergunta WHERE codigo_acesso = ?";
+        try (PreparedStatement ps = connection.prepareStatement(sqlPergunta)) {
+            ps.setString(1, codigo);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return null; // código não existe
+                }
+                pd = new PerguntaDetalhes();
+                pd.id          = rs.getInt("id");
+                pd.enunciado   = rs.getString("enunciado");
+                pd.dataInicio  = rs.getString("data_inicio");
+                pd.dataFim     = rs.getString("data_fim");
+                pd.codigoAcesso= rs.getString("codigo_acesso");
+                pd.docenteId   = rs.getInt("docente_id");
+                pd.dataCriacao = rs.getString("data_criacao");
+            }
+        }
+
+        // calcular estado (FUTURA / ATIVA / EXPIRADA)
+        String sqlEstado = "SELECT CASE " +
+                "WHEN datetime('now') < ? THEN 'FUTURA' " +
+                "WHEN datetime('now') > ? THEN 'EXPIRADA' " +
+                "ELSE 'ATIVA' END AS estado";
+        try (PreparedStatement psEstado = connection.prepareStatement(sqlEstado)) {
+            psEstado.setString(1, pd.dataInicio);
+            psEstado.setString(2, pd.dataFim);
+            try (ResultSet rsEstado = psEstado.executeQuery()) {
+                pd.estado = rsEstado.next() ? rsEstado.getString("estado") : "DESCONHECIDO";
+            }
+        }
+
+        // opções da pergunta
+        String sqlOpcoes = "SELECT * FROM Opcao WHERE pergunta_id = ? ORDER BY letra";
+        try (PreparedStatement ps = connection.prepareStatement(sqlOpcoes)) {
+            ps.setInt(1, pd.id);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    PerguntaDetalhes.OpcaoDetalhes od = new PerguntaDetalhes.OpcaoDetalhes(
+                            rs.getInt("id"),
+                            rs.getString("letra"),
+                            rs.getString("texto"),
+                            rs.getInt("is_correta") == 1
+                    );
+                    pd.opcoes.add(od);
+                }
+            }
+        }
+
+        return pd;
+    }
+
     /**
      * Exporta resultados de uma pergunta para formato CSV
      */

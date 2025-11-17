@@ -135,6 +135,7 @@ public class Main {
             }, "Multicast-Receiver").start();
 
             // ===== HEARTBEAT THREAD (UDP + MULTICAST) =====
+            // ===== HEARTBEAT THREAD (UDP + MULTICAST) =====
             new Thread(() -> {
                 try {
                     while (true) {
@@ -145,21 +146,33 @@ public class Main {
                         String hbMsg = "HEARTBEAT:" + versaoAtual + ":" + portoTCPClientes + ":" + portoTCPSync;
                         byte[] hbBytes = hbMsg.getBytes();
 
-                        DatagramPacket hbPacket = new DatagramPacket(hbBytes, hbBytes.length, ipDiretoria_addr, portoDiretoria);
+                        // Heartbeat para a diretoria (ESSENCIAL)
+                        DatagramPacket hbPacket = new DatagramPacket(
+                                hbBytes,
+                                hbBytes.length,
+                                ipDiretoria_addr,
+                                portoDiretoria
+                        );
                         socket.send(hbPacket);
 
+                        // Heartbeat multicast (opcional, não pode matar a thread)
                         if (ehPrincipal) {
-                            DatagramPacket multicastPacket = new DatagramPacket(
-                                    hbBytes,
-                                    hbBytes.length,
-                                    grupoMulticast,
-                                    MULTICAST_PORT
-                            );
-                            socket.send(multicastPacket);
+                            try {
+                                DatagramPacket multicastPacket = new DatagramPacket(
+                                        hbBytes,
+                                        hbBytes.length,
+                                        grupoMulticast,
+                                        MULTICAST_PORT
+                                );
+                                socket.send(multicastPacket);
+                            } catch (Exception me) {
+                                System.err.println("[Servidor] Erro ao enviar heartbeat multicast: " + me.getMessage());
+                                // ignora, segue a vida — diretoria continua a receber
+                            }
                         }
                     }
                 } catch (Exception e) {
-                    System.err.println("[Servidor] Erro no heartbeat: " + e.getMessage());
+                    System.err.println("[Servidor] Erro no heartbeat (diretoria): " + e.getMessage());
                 }
             }, "HB-Thread").start();
 
@@ -266,6 +279,60 @@ public class Main {
                                         );
                                         enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), querySql);
                                     }
+                                    else if (msg.startsWith("OBTER_PERGUNTA_CODIGO")) {
+                                        if (!sessao.autenticado || !"ESTUDANTE".equals(sessao.role)) {
+                                            out.println("ERRO: PERMISSAO_NEGADA");
+                                            continue;
+                                        }
+
+                                        String[] p = msg.split(";", 2);
+                                        if (p.length < 2) {
+                                            out.println("ERRO:ARGS");
+                                            continue;
+                                        }
+
+                                        String codigo = p[1];
+
+                                        try {
+                                            PerguntaDetalhes pd = db.obterPerguntaAtivaPorCodigo(codigo);
+                                            if (pd == null) {
+                                                out.println("ERRO:CODIGO_INVALIDO");
+                                                continue;
+                                            }
+
+                                            // tem de estar ATIVA
+                                            if (!"ATIVA".equals(pd.estado)) {
+                                                out.println("ERRO:PERGUNTA_NAO_ATIVA");
+                                                continue;
+                                            }
+
+                                            // e ter pelo menos 2 opções
+                                            if (pd.opcoes.size() < 2) {
+                                                out.println("ERRO:PERGUNTA_INCOMPLETA");
+                                                continue;
+                                            }
+
+                                            StringBuilder sb = new StringBuilder("PERGUNTA_PARA_RESPONDER:");
+                                            sb.append(pd.id).append(";")
+                                                    .append(pd.enunciado).append(";")
+                                                    .append(pd.dataInicio).append(";")
+                                                    .append(pd.dataFim).append(";")
+                                                    .append(pd.codigoAcesso);
+
+                                            sb.append("|OPCOES:").append(pd.opcoes.size());
+                                            for (var op : pd.opcoes) {
+                                                sb.append("|")
+                                                        .append(op.letra).append(";")
+                                                        .append(op.texto);
+                                            }
+
+                                            out.println(sb.toString());
+
+                                        } catch (SQLException e) {
+                                            out.println("ERRO:SQL:" + e.getMessage());
+                                        }
+                                    }
+
                                     else if (msg.startsWith("REGISTAR_DOCENTE")) {
                                         String[] p = msg.split(";", 5);
                                         if (p.length < 5) { out.println("ERRO:ARGS"); continue; }
