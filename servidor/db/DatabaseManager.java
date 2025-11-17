@@ -368,6 +368,25 @@ public class DatabaseManager {
         }
     }
 
+    /**
+     * Atualiza os dados pessoais de um docente (nome, email, password).
+     */
+    public synchronized void atualizarDocentePerfil(int docenteId,
+                                                    String novoNome,
+                                                    String novoEmail,
+                                                    String novaPasswordClaro) throws SQLException {
+        if (connection == null || connection.isClosed()) connect();
+
+        String sql = "UPDATE Docente SET nome = ?, email = ?, password_hash = ? WHERE id = ?";
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, novoNome);
+            ps.setString(2, novoEmail);
+            ps.setString(3, hashPassword(novaPasswordClaro));
+            ps.setInt(4, docenteId);
+            ps.executeUpdate();
+        }
+    }
+
     public synchronized void executarQuery(String sql) throws SQLException {
         if (connection == null || connection.isClosed()) {
             connect();

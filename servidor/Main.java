@@ -320,6 +320,39 @@ public class Main {
                                             else out.println("ERRO:SQL");
                                         }
                                     }
+                                    else if (msg.startsWith("EDITAR_DOCENTE")) {
+                                        if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) {
+                                            out.println("ERRO: PERMISSAO_NEGADA"); continue;
+                                        }
+
+                                        String[] p = msg.split(";", 4);
+                                        if (p.length < 4) { out.println("ERRO:ARGS"); continue; }
+
+                                        String novoNome  = p[1];
+                                        String novoEmail = p[2];
+                                        String novaPass  = p[3];
+
+                                        try {
+                                            db.atualizarDocentePerfil(sessao.docenteId, novoNome, novoEmail, novaPass);
+                                            db.incrementarVersao();
+                                            out.println("DOCENTE_ATUALIZADO");
+
+                                            String passHash = servidor.db.DatabaseManager.hashPassword(novaPass);
+                                            String q = String.format(
+                                                    "UPDATE Docente SET nome='%s', email='%s', password_hash='%s' WHERE id=%d",
+                                                    novoNome.replace("'", "''"),
+                                                    novoEmail.replace("'", "''"),
+                                                    passHash,
+                                                    sessao.docenteId
+                                            );
+                                            enviarHeartbeatComQuery(socket, grupoMulticast, db.getVersao(), q);
+
+                                        } catch (SQLException e) {
+                                            String m = String.valueOf(e.getMessage());
+                                            if (m.contains("UNIQUE")) out.println("ERRO:EMAIL_DUPLICADO");
+                                            else out.println("ERRO:SQL");
+                                        }
+                                    }
 
                                     // ===== FASE 2: NOVAS FUNCIONALIDADES DO DOCENTE =====
 
@@ -512,6 +545,13 @@ public class Main {
                                                 out.println("ERRO:SQL:" + e.getMessage());
                                             }
                                         }
+                                    }
+                                    else if ("LOGOUT".equals(msg)) {
+                                        sessao.autenticado = false;
+                                        sessao.role = null;
+                                        sessao.docenteId = null;
+                                        sessao.estudanteId = null;
+                                        out.println("LOGOUT_OK");
                                     }
 
                                     else {

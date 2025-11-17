@@ -159,6 +159,21 @@ public class Main {
                                     wire = "EXPORTAR_CSV;" + pid;
                                     break;
                                 }
+                                case "13": { // Editar dados pessoais (docente)
+                                    System.out.print("Novo nome: ");
+                                    String nome = sc.nextLine().trim();
+                                    System.out.print("Novo email: ");
+                                    String email = sc.nextLine().trim();
+                                    System.out.print("Nova password: ");
+                                    String pass = sc.nextLine().trim();
+                                    wire = "EDITAR_DOCENTE;" + nome + ";" + email + ";" + pass;
+                                    break;
+                                }
+
+                                case "14": { // Logout
+                                    wire = "LOGOUT";
+                                    break;
+                                }
 
                                 default:
                                     System.out.println("[Cliente] Opção inválida.");
@@ -358,6 +373,8 @@ public class Main {
         System.out.println(" 10) Eliminar pergunta");
         System.out.println(" 11) Ver resultados de pergunta expirada");
         System.out.println(" 12) Exportar resultados para CSV");
+        System.out.println(" 13) Editar dados pessoais (docente)");
+        System.out.println(" 14) Logout");
         System.out.println("\n  0) Sair");
     }
 }
