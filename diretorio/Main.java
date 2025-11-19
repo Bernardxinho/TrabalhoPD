@@ -11,7 +11,7 @@ public class Main {
     private static final List<ServidorInfo> servidoresAtivos =
             Collections.synchronizedList(new ArrayList<>());
 
-    private static final boolean VERBOSE_HB = true; // true  -> mostra cada heartbeat (~5s), false -> mostra apenas resumo por minuto
+    private static final boolean VERBOSE_HB = true;
     private static final DateTimeFormatter FMT_HHMMSS =
             DateTimeFormatter.ofPattern("HH:mm:ss");
 
@@ -49,10 +49,10 @@ public class Main {
        try {
             if (mensagem.startsWith("REGISTO:")) {
                 String[] p = mensagem.split(":");
-                if (p.length >= 2) portoTCP = Integer.parseInt(p[1]);          // REGISTO:<portoClientes>[:portoSync]
+                if (p.length >= 2) portoTCP = Integer.parseInt(p[1]);         
             } else if (mensagem.startsWith("HEARTBEAT:")) {
                 String[] p = mensagem.split(":");
-                if (p.length >= 3) portoTCP = Integer.parseInt(p[2]);          // HEARTBEAT:<versao>:<portoClientes>:<portoSync>
+                if (p.length >= 3) portoTCP = Integer.parseInt(p[2]);          
             }
         } catch (NumberFormatException e) {
             System.err.println("[Diretoria] Erro a ler porto: " + mensagem);
@@ -142,7 +142,7 @@ public class Main {
     private static void verificarInatividade() {
         while (true) {
             try {
-                Thread.sleep(5000); // verifica a cada 5s
+                Thread.sleep(5000); 
                 boolean mudou = false;
 
                 synchronized (servidoresAtivos) {
@@ -175,11 +175,10 @@ public class Main {
         }
     }
 
-    // VERBOSE_HB=false
     private static void resumoPeriodico() {
         while (true) {
             try {
-                Thread.sleep(60_000); //1 minuto
+                Thread.sleep(60_000); 
                 ServidorInfo principal;
                 int ativos;
 

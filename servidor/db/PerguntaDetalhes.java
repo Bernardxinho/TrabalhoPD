@@ -11,7 +11,7 @@ public class PerguntaDetalhes {
     public String codigoAcesso;
     public int docenteId;
     public String dataCriacao;
-    public String estado; // "ATIVA", "FUTURA", "EXPIRADA"
+    public String estado; 
     public int numRespostas;
 
     public List<OpcaoDetalhes> opcoes = new ArrayList<>();
@@ -22,7 +22,7 @@ public class PerguntaDetalhes {
         public String letra;
         public String texto;
         public boolean isCorreta;
-        public int numRespostas; // quantos estudantes escolheram esta opção
+        public int numRespostas; 
 
         public OpcaoDetalhes(int id, String letra, String texto, boolean isCorreta) {
             this.id = id;

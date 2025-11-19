@@ -16,9 +16,8 @@ public class DatabaseManager {
             connection = DriverManager.getConnection("jdbc:sqlite:" + dbPath);
             connection.setAutoCommit(true);
 
-            // Configurações importantes para SQLite com múltiplas threads
             Statement stmt = connection.createStatement();
-            stmt.execute("PRAGMA journal_mode=WAL;"); // Write-Ahead Logging para melhor concorrência
+            stmt.execute("PRAGMA journal_mode=WAL;"); 
             stmt.execute("PRAGMA synchronous=NORMAL;");
             stmt.close();
 
@@ -129,10 +128,8 @@ public class DatabaseManager {
         }
     }
 
-    // Método sincronizado para thread-safety
     public synchronized int getVersao() {
         try {
-            // Verificar se a conexão está fechada
             if (connection == null || connection.isClosed()) {
                 System.err.println("[DB] Conexão fechada, a reconectar...");
                 connect();
@@ -154,10 +151,8 @@ public class DatabaseManager {
         return 0;
     }
 
-    // Método sincronizado para thread-safety
     public synchronized void incrementarVersao() {
         try {
-            // Verificar se a conexão está fechada
             if (connection == null || connection.isClosed()) {
                 System.err.println("[DB] Conexão fechada, a reconectar...");
                 connect();
@@ -202,7 +197,6 @@ public class DatabaseManager {
 
     public Connection getConnection() {
         try {
-            // Verificar se a conexão está fechada e reconectar se necessário
             if (connection == null || connection.isClosed()) {
                 System.err.println("[DB] Conexão fechada, a reconectar...");
                 connect();
@@ -258,7 +252,6 @@ public class DatabaseManager {
         return false;
     }
 
-    // Classe interna para retornar resultado completo
     public static class PerguntaResult {
         public int id;
         public String codigoAcesso;
@@ -301,7 +294,6 @@ public class DatabaseManager {
         ps.executeUpdate();
         ps.close();
     }
-
     public synchronized void guardarResposta(int estudanteId, int perguntaId, String letra) throws SQLException {
         if (connection == null || connection.isClosed()) {
             connect();
@@ -314,7 +306,6 @@ public class DatabaseManager {
         ps.executeUpdate();
         ps.close();
     }
-
     public synchronized int getDocenteId(String email) throws SQLException {
         if (connection == null || connection.isClosed()) {
             connect();
@@ -327,7 +318,6 @@ public class DatabaseManager {
         ps.close();
         return id;
     }
-
     public synchronized boolean validarCodigoDocente(String codigoClaro) throws SQLException {
         if (connection == null || connection.isClosed()) connect();
         try (Statement st = connection.createStatement();
@@ -338,7 +328,6 @@ public class DatabaseManager {
             return hashBD != null && hashBD.equals(hashIntroduzido);
         }
     }
-
     public synchronized int criarDocente(String nome, String email, String passwordClaro) throws SQLException {
         if (connection == null || connection.isClosed()) connect();
         String sql = "INSERT INTO Docente (nome, email, password_hash) VALUES (?, ?, ?)";
@@ -352,7 +341,6 @@ public class DatabaseManager {
             }
         }
     }
-
     public synchronized int criarEstudante(int numero, String nome, String email, String passwordClaro) throws SQLException {
         if (connection == null || connection.isClosed()) connect();
         String sql = "INSERT INTO Estudante (numero, nome, email, password_hash) VALUES (?, ?, ?, ?)";
@@ -367,10 +355,6 @@ public class DatabaseManager {
             }
         }
     }
-
-    /**
-     * Atualiza os dados pessoais de um docente (nome, email, password).
-     */
     public synchronized void atualizarDocentePerfil(int docenteId,
                                                     String novoNome,
                                                     String novoEmail,
@@ -395,14 +379,11 @@ public class DatabaseManager {
         stmt.executeUpdate(sql);
         stmt.close();
     }
-
-    // ===== FASE 2: FUNCIONALIDADES DO DOCENTE =====
-
     /**
      * Lista perguntas de um docente com filtros opcionais
-     * @param docenteId ID do docente
-     * @param filtroEstado null, "ATIVA", "FUTURA", "EXPIRADA"
-     * @return Lista de perguntas resumidas
+     * @param docenteId 
+     * @param filtroEstado 
+     * @return
      */
     public synchronized java.util.List<PerguntaDetalhes> listarPerguntas(int docenteId, String filtroEstado) throws SQLException {
         if (connection == null || connection.isClosed()) connect();
@@ -471,10 +452,6 @@ public class DatabaseManager {
 
         return lista;
     }
-
-    /**
-     * Verifica se uma pergunta tem respostas associadas
-     */
     public synchronized boolean perguntaTemRespostas(int perguntaId) throws SQLException {
         if (connection == null || connection.isClosed()) connect();
 
@@ -486,10 +463,6 @@ public class DatabaseManager {
             }
         }
     }
-
-    /**
-     * Verifica se uma pergunta pertence a um docente
-     */
     public synchronized boolean perguntaPertenceADocente(int perguntaId, int docenteId) throws SQLException {
         if (connection == null || connection.isClosed()) connect();
 
@@ -502,10 +475,6 @@ public class DatabaseManager {
             }
         }
     }
-
-    /**
-     * Edita uma pergunta (apenas se não tiver respostas)
-     */
     public synchronized void editarPergunta(int perguntaId, String novoEnunciado,
                                             String novaDataInicio, String novaDataFim) throws SQLException {
         if (connection == null || connection.isClosed()) connect();
@@ -523,10 +492,6 @@ public class DatabaseManager {
             ps.executeUpdate();
         }
     }
-
-    /**
-     * Edita uma opção de uma pergunta (apenas se a pergunta não tiver respostas)
-     */
     public synchronized void editarOpcao(int opcaoId, int perguntaId, String novoTexto, boolean novaCorreta) throws SQLException {
         if (connection == null || connection.isClosed()) connect();
 
@@ -544,24 +509,17 @@ public class DatabaseManager {
         }
     }
 
-    /**
-     * Elimina uma pergunta (apenas se não tiver respostas)
-     */
     public synchronized void eliminarPergunta(int perguntaId) throws SQLException {
         if (connection == null || connection.isClosed()) connect();
 
         if (perguntaTemRespostas(perguntaId)) {
             throw new SQLException("Não é possível eliminar: pergunta já tem respostas");
         }
-
-        // Eliminar opções primeiro (CASCADE deveria fazer isto, mas vamos garantir)
         String sqlOpcoes = "DELETE FROM Opcao WHERE pergunta_id = ?";
         try (PreparedStatement ps = connection.prepareStatement(sqlOpcoes)) {
             ps.setInt(1, perguntaId);
             ps.executeUpdate();
         }
-
-        // Eliminar pergunta
         String sql = "DELETE FROM Pergunta WHERE id = ?";
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setInt(1, perguntaId);
@@ -569,20 +527,15 @@ public class DatabaseManager {
         }
     }
 
-    /**
-     * Obtém detalhes completos de uma pergunta expirada com respostas
-     */
     public synchronized PerguntaDetalhes obterDetalhesPerguntaExpirada(int perguntaId, int docenteId) throws SQLException {
         if (connection == null || connection.isClosed()) connect();
 
-        // Verificar se pertence ao docente
         if (!perguntaPertenceADocente(perguntaId, docenteId)) {
             throw new SQLException("Pergunta não pertence ao docente");
         }
 
         PerguntaDetalhes pd = new PerguntaDetalhes();
 
-        // Obter dados da pergunta
         String sqlPergunta = "SELECT * FROM Pergunta WHERE id = ?";
         try (PreparedStatement ps = connection.prepareStatement(sqlPergunta)) {
             ps.setInt(1, perguntaId);
@@ -599,7 +552,6 @@ public class DatabaseManager {
                 pd.docenteId = rs.getInt("docente_id");
                 pd.dataCriacao = rs.getString("data_criacao");
 
-                // Verificar se está expirada
                 String sqlEstado = "SELECT CASE WHEN datetime('now') > ? THEN 1 ELSE 0 END as expirada";
                 try (PreparedStatement psEstado = connection.prepareStatement(sqlEstado)) {
                     psEstado.setString(1, pd.dataFim);
@@ -613,7 +565,6 @@ public class DatabaseManager {
             }
         }
 
-        // Obter opções
         String sqlOpcoes = "SELECT * FROM Opcao WHERE pergunta_id = ? ORDER BY letra";
         try (PreparedStatement ps = connection.prepareStatement(sqlOpcoes)) {
             ps.setInt(1, perguntaId);
@@ -626,7 +577,6 @@ public class DatabaseManager {
                             rs.getInt("is_correta") == 1
                     );
 
-                    // Contar quantos escolheram esta opção
                     String sqlCount = "SELECT COUNT(*) as total FROM Resposta WHERE pergunta_id = ? AND opcao_letra = ?";
                     try (PreparedStatement psCount = connection.prepareStatement(sqlCount)) {
                         psCount.setInt(1, perguntaId);
@@ -643,7 +593,6 @@ public class DatabaseManager {
             }
         }
 
-        // Obter respostas dos estudantes
         String sqlRespostas = "SELECT r.opcao_letra, r.data_hora, " +
                 "e.id as est_id, e.numero, e.nome, e.email, " +
                 "o.is_correta " +
@@ -686,7 +635,7 @@ public class DatabaseManager {
             ps.setString(1, codigo);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) {
-                    return null; // código não existe
+                    return null;
                 }
                 pd = new PerguntaDetalhes();
                 pd.id          = rs.getInt("id");
@@ -699,7 +648,6 @@ public class DatabaseManager {
             }
         }
 
-        // calcular estado (FUTURA / ATIVA / EXPIRADA)
         String sqlEstado = "SELECT CASE " +
                 "WHEN datetime('now') < ? THEN 'FUTURA' " +
                 "WHEN datetime('now') > ? THEN 'EXPIRADA' " +
@@ -712,7 +660,6 @@ public class DatabaseManager {
             }
         }
 
-        // opções da pergunta
         String sqlOpcoes = "SELECT * FROM Opcao WHERE pergunta_id = ? ORDER BY letra";
         try (PreparedStatement ps = connection.prepareStatement(sqlOpcoes)) {
             ps.setInt(1, pd.id);
@@ -732,7 +679,6 @@ public class DatabaseManager {
         return pd;
     }
 
-    // perto das outras classes internas (ex.: PerguntaDetalhes, etc.)
     public static class RespostaEstudanteInfo {
         public int perguntaId;
         public String enunciado;
@@ -789,23 +735,17 @@ public class DatabaseManager {
         return lista;
     }
 
-    /**
-     * Exporta resultados de uma pergunta para formato CSV
-     */
     public synchronized String exportarParaCSV(int perguntaId, int docenteId) throws SQLException {
         PerguntaDetalhes pd = obterDetalhesPerguntaExpirada(perguntaId, docenteId);
 
         StringBuilder csv = new StringBuilder();
 
-        // Cabeçalho - informação da pergunta
         csv.append("\"dia\";\"hora inicial\";\"hora final\";\"enunciado da pergunta\";\"opção certa\"\n");
 
-        // Extrair dia e horas
-        String dia = pd.dataInicio.substring(0, 10); // AAAA-MM-DD
-        String horaInicial = pd.dataInicio.substring(11, 16); // HH:mm
+        String dia = pd.dataInicio.substring(0, 10); 
+        String horaInicial = pd.dataInicio.substring(11, 16); 
         String horaFinal = pd.dataFim.substring(11, 16);
 
-        // Encontrar letra da opção correta
         String letraCorreta = "";
         for (PerguntaDetalhes.OpcaoDetalhes op : pd.opcoes) {
             if (op.isCorreta) {
@@ -816,10 +756,9 @@ public class DatabaseManager {
 
         csv.append(String.format("\"%s\";\"%s\";\"%s\";\"%s\";\"%s\"\n",
                 dia, horaInicial, horaFinal,
-                pd.enunciado.replace("\"", "\"\""), // escapar aspas
+                pd.enunciado.replace("\"", "\"\""), 
                 letraCorreta));
 
-        // Opções
         csv.append("\n\"opção\";\"texto da opção\"\n");
         for (PerguntaDetalhes.OpcaoDetalhes op : pd.opcoes) {
             csv.append(String.format("\"%s\";\"%s\"\n",
@@ -827,7 +766,6 @@ public class DatabaseManager {
                     op.texto.replace("\"", "\"\"")));
         }
 
-        // Respostas dos estudantes
         csv.append("\n\"número de estudante\";\"nome\";\"e-mail\";\"resposta\"\n");
         for (PerguntaDetalhes.RespostaDetalhes resp : pd.respostas) {
             csv.append(String.format("\"%d\";\"%s\";\"%s\";\"%s\"\n",
@@ -836,7 +774,6 @@ public class DatabaseManager {
                     resp.estudanteEmail,
                     resp.opcaoLetra));
         }
-
         return csv.toString();
     }
 
