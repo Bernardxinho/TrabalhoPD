@@ -67,61 +67,93 @@ public class ClienteHandler implements Runnable {
                 }
 
                 else if (msg.startsWith("CRIAR_PERGUNTA")) {
-                    if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) { out.println("ERRO: PERMISSAO_NEGADA"); continue; }
+                    if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) {
+                        out.println("ERRO: PERMISSAO_NEGADA");
+                        continue;
+                    }
                     String[] p = msg.split(";");
-                    String enunciado, inicio, fim;
-                    if (p.length == 5) { enunciado = p[2]; inicio = p[3]; fim = p[4]; }
-                    else { enunciado = p[1]; inicio = p[2]; fim = p[3]; }
 
-                    var res = db.criarPerguntaCompleta(sessao.docenteId, enunciado, inicio, fim);
-                    db.incrementarVersao();
-                    out.println("PERGUNTA_CRIADA:" + res.id + ":" + res.codigoAcesso);
+                    synchronized (db) {
+                        String enunciado, inicio, fim;
+                        if (p.length == 5) {
+                            enunciado = p[2];
+                            inicio = p[3];
+                            fim = p[4];
+                        } else {
+                            enunciado = p[1];
+                            inicio = p[2];
+                            fim = p[3];
+                        }
 
-                    String querySql = String.format(
-                        "INSERT INTO Pergunta (enunciado,data_inicio,data_fim,codigo_acesso,docente_id) VALUES ('%s','%s','%s','%s',%d)",
-                        enunciado.replace("'", "''"), inicio, fim, res.codigoAcesso, sessao.docenteId
-                    );
-                    replicator.sendUpdate(db.getVersao(), querySql);
+                        var res = db.criarPerguntaCompleta(sessao.docenteId, enunciado, inicio, fim);
+                        int versao = db.incrementarVersao();
+                        out.println("PERGUNTA_CRIADA:" + res.id + ":" + res.codigoAcesso);
+
+                        String querySql = String.format(
+                                "INSERT INTO Pergunta (enunciado,data_inicio,data_fim,codigo_acesso,docente_id) " +
+                                        "VALUES ('%s','%s','%s','%s',%d)",
+                                enunciado.replace("'", "''"), inicio, fim, res.codigoAcesso, sessao.docenteId
+                        );
+                        replicator.sendUpdate(versao, querySql);
+                    }
                 }
                 else if (msg.startsWith("ADICIONAR_OPCAO")) {
-                    if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) { out.println("ERRO: PERMISSAO_NEGADA"); continue; }
+                    if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) {
+                        out.println("ERRO: PERMISSAO_NEGADA");
+                        continue;
+                    }
                     String[] p = msg.split(";");
-                    int perguntaId = Integer.parseInt(p[1]);
-                    String letra = p[2];
-                    String texto = p[3];
-                    boolean correta = p[4].equals("1");
 
-                    db.adicionarOpcao(perguntaId, letra, texto, correta);
-                    db.incrementarVersao();
-                    out.println("OPCAO_ADICIONADA");
+                    synchronized (db) {
+                        int perguntaId = Integer.parseInt(p[1]);
+                        String letra = p[2];
+                        String texto = p[3];
+                        boolean correta = p[4].equals("1");
 
-                    String querySql = String.format(
-                        "INSERT INTO Opcao (pergunta_id,letra,texto,is_correta) VALUES (%d,'%s','%s',%d)",
-                        perguntaId, letra, texto.replace("'", "''"), correta ? 1 : 0
-                    );
-                    replicator.sendUpdate(db.getVersao(), querySql);
+                        db.adicionarOpcao(perguntaId, letra, texto, correta);
+                        int versao = db.incrementarVersao();
+                        out.println("OPCAO_ADICIONADA");
+
+                        String querySql = String.format(
+                                "INSERT INTO Opcao (pergunta_id,letra,texto,is_correta) VALUES (%d,'%s','%s',%d)",
+                                perguntaId, letra, texto.replace("'", "''"), correta ? 1 : 0
+                        );
+                        replicator.sendUpdate(versao, querySql);
+                    }
                 }
 
                 else if (msg.startsWith("RESPONDER")) {
-                    if (!sessao.autenticado || !"ESTUDANTE".equals(sessao.role)) { out.println("ERRO: PERMISSAO_NEGADA"); continue; }
+                    if (!sessao.autenticado || !"ESTUDANTE".equals(sessao.role)) {
+                        out.println("ERRO: PERMISSAO_NEGADA");
+                        continue;
+                    }
                     String[] p = msg.split(";");
-                    if (p.length < 3) { out.println("ERRO:ARGS"); continue; }
+                    if (p.length < 3) {
+                        out.println("ERRO:ARGS");
+                        continue;
+                    }
 
                     int perguntaId;
-                    try { perguntaId = Integer.parseInt(p[1]); }
-                    catch (NumberFormatException nfe) { out.println("ERRO:ID_INVALIDO"); continue; }
+                    try {
+                        perguntaId = Integer.parseInt(p[1]);
+                    } catch (NumberFormatException nfe) {
+                        out.println("ERRO:ID_INVALIDO");
+                        continue;
+                    }
 
                     String letra = p[2];
                     try {
-                        db.guardarResposta(sessao.estudanteId, perguntaId, letra);
-                        db.incrementarVersao();
-                        out.println("RESPOSTA_GUARDADA");
+                        synchronized (db) {
+                            db.guardarResposta(sessao.estudanteId, perguntaId, letra);
+                            int versao = db.incrementarVersao();
+                            out.println("RESPOSTA_GUARDADA");
 
-                        String querySql = String.format(
-                            "INSERT INTO Resposta (estudante_id,pergunta_id,opcao_letra) VALUES (%d,%d,'%s')",
-                            sessao.estudanteId, perguntaId, letra
-                        );
-                        replicator.sendUpdate(db.getVersao(), querySql);
+                            String querySql = String.format(
+                                    "INSERT INTO Resposta (estudante_id,pergunta_id,opcao_letra) VALUES (%d,%d,'%s')",
+                                    sessao.estudanteId, perguntaId, letra
+                            );
+                            replicator.sendUpdate(versao, querySql);
+                        }
                     } catch (SQLException e) {
                         String m = e.getMessage() != null ? e.getMessage() : "";
                         if (m.contains("UNIQUE")) out.println("ERRO:JA_RESPONDEU");
@@ -163,17 +195,23 @@ public class ClienteHandler implements Runnable {
                     String nome = p[1], email = p[2], pass = p[3], codigo = p[4].trim();
 
                     try {
-                        if (!db.validarCodigoDocente(codigo)) { out.println("ERRO:CODIGO_DOCENTE_INVALIDO"); continue; }
-                        int id = db.criarDocente(nome, email, pass);
-                        db.incrementarVersao();
-                        out.println("DOCENTE_CRIADO:" + id);
+                        if (!db.validarCodigoDocente(codigo)) {
+                            out.println("ERRO:CODIGO_DOCENTE_INVALIDO");
+                            continue;
+                        }
 
-                        String passHash = DatabaseManager.hashPassword(pass);
-                        String q = String.format(
-                            "INSERT INTO Docente (nome,email,password_hash) VALUES ('%s','%s','%s')",
-                            nome.replace("'", "''"), email.replace("'", "''"), passHash
-                        );
-                        replicator.sendUpdate(db.getVersao(), q);
+                        synchronized (db) {
+                            int id = db.criarDocente(nome, email, pass);
+                            int versao = db.incrementarVersao();
+                            out.println("DOCENTE_CRIADO:" + id);
+
+                            String passHash = DatabaseManager.hashPassword(pass);
+                            String q = String.format(
+                                    "INSERT INTO Docente (nome,email,password_hash) VALUES ('%s','%s','%s')",
+                                    nome.replace("'", "''"), email.replace("'", "''"), passHash
+                            );
+                            replicator.sendUpdate(versao, q);
+                        }
                     } catch (SQLException e) {
                         String m = String.valueOf(e.getMessage());
                         if (m.contains("UNIQUE")) out.println("ERRO:EMAIL_DUPLICADO");
@@ -186,16 +224,19 @@ public class ClienteHandler implements Runnable {
                     try {
                         int numero = Integer.parseInt(p[1]);
                         String nome = p[2], email = p[3], pass = p[4];
-                        int id = db.criarEstudante(numero, nome, email, pass);
-                        db.incrementarVersao();
-                        out.println("ESTUDANTE_CRIADO:" + id);
 
-                        String passHash = DatabaseManager.hashPassword(pass);
-                        String q = String.format(
-                            "INSERT INTO Estudante (numero,nome,email,password_hash) VALUES (%d,'%s','%s','%s')",
-                            numero, nome.replace("'", "''"), email.replace("'", "''"), passHash
-                        );
-                        replicator.sendUpdate(db.getVersao(), q);
+                        synchronized (db) {
+                            int id = db.criarEstudante(numero, nome, email, pass);
+                            int versao = db.incrementarVersao();
+                            out.println("ESTUDANTE_CRIADO:" + id);
+
+                            String passHash = DatabaseManager.hashPassword(pass);
+                            String q = String.format(
+                                    "INSERT INTO Estudante (numero,nome,email,password_hash) VALUES (%d,'%s','%s','%s')",
+                                    numero, nome.replace("'", "''"), email.replace("'", "''"), passHash
+                            );
+                            replicator.sendUpdate(versao, q);
+                        }
                     } catch (NumberFormatException nfe) {
                         out.println("ERRO:NUMERO_INVALIDO");
                     } catch (SQLException e) {
@@ -205,7 +246,10 @@ public class ClienteHandler implements Runnable {
                     }
                 }
                 else if (msg.startsWith("EDITAR_DOCENTE")) {
-                    if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) { out.println("ERRO: PERMISSAO_NEGADA"); continue; }
+                    if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) {
+                        out.println("ERRO: PERMISSAO_NEGADA");
+                        continue;
+                    }
                     String[] p = msg.split(";", 4);
                     if (p.length < 4) { out.println("ERRO:ARGS"); continue; }
 
@@ -214,16 +258,18 @@ public class ClienteHandler implements Runnable {
                     String novaPass  = p[3];
 
                     try {
-                        db.atualizarDocentePerfil(sessao.docenteId, novoNome, novoEmail, novaPass);
-                        db.incrementarVersao();
-                        out.println("DOCENTE_ATUALIZADO");
+                        synchronized (db) {
+                            db.atualizarDocentePerfil(sessao.docenteId, novoNome, novoEmail, novaPass);
+                            int versao = db.incrementarVersao();
+                            out.println("DOCENTE_ATUALIZADO");
 
-                        String passHash = DatabaseManager.hashPassword(novaPass);
-                        String q = String.format(
-                            "UPDATE Docente SET nome='%s', email='%s', password_hash='%s' WHERE id=%d",
-                            novoNome.replace("'", "''"), novoEmail.replace("'", "''"), passHash, sessao.docenteId
-                        );
-                        replicator.sendUpdate(db.getVersao(), q);
+                            String passHash = DatabaseManager.hashPassword(novaPass);
+                            String q = String.format(
+                                    "UPDATE Docente SET nome='%s', email='%s', password_hash='%s' WHERE id=%d",
+                                    novoNome.replace("'", "''"), novoEmail.replace("'", "''"), passHash, sessao.docenteId
+                            );
+                            replicator.sendUpdate(versao, q);
+                        }
                     } catch (SQLException e) {
                         String m = String.valueOf(e.getMessage());
                         if (m.contains("UNIQUE")) out.println("ERRO:EMAIL_DUPLICADO");
@@ -231,7 +277,10 @@ public class ClienteHandler implements Runnable {
                     }
                 }
                 else if (msg.startsWith("EDITAR_ESTUDANTE")) {
-                    if (!sessao.autenticado || !"ESTUDANTE".equals(sessao.role)) { out.println("ERRO: PERMISSAO_NEGADA"); continue; }
+                    if (!sessao.autenticado || !"ESTUDANTE".equals(sessao.role)) {
+                        out.println("ERRO: PERMISSAO_NEGADA");
+                        continue;
+                    }
                     String[] p = msg.split(";", 4);
                     if (p.length < 4) { out.println("ERRO:ARGS"); continue; }
 
@@ -240,16 +289,18 @@ public class ClienteHandler implements Runnable {
                     String novaPass  = p[3];
 
                     try {
-                        db.atualizarEstudantePerfil(sessao.estudanteId, novoNome, novoEmail, novaPass);
-                        db.incrementarVersao();
-                        out.println("ESTUDANTE_ATUALIZADO");
+                        synchronized (db) {
+                            db.atualizarEstudantePerfil(sessao.estudanteId, novoNome, novoEmail, novaPass);
+                            int versao = db.incrementarVersao();
+                            out.println("ESTUDANTE_ATUALIZADO");
 
-                        String passHash = DatabaseManager.hashPassword(novaPass);
-                        String q = String.format(
-                            "UPDATE Estudante SET nome='%s', email='%s', password_hash='%s' WHERE id=%d",
-                            novoNome.replace("'", "''"), novoEmail.replace("'", "''"), passHash, sessao.estudanteId
-                        );
-                        replicator.sendUpdate(db.getVersao(), q);
+                            String passHash = DatabaseManager.hashPassword(novaPass);
+                            String q = String.format(
+                                    "UPDATE Estudante SET nome='%s', email='%s', password_hash='%s' WHERE id=%d",
+                                    novoNome.replace("'", "''"), novoEmail.replace("'", "''"), passHash, sessao.estudanteId
+                            );
+                            replicator.sendUpdate(versao, q);
+                        }
                     } catch (SQLException e) {
                         String m = e.getMessage() != null ? e.getMessage() : "";
                         if (m.contains("UNIQUE")) out.println("ERRO:EMAIL_DUPLICADO");
@@ -284,7 +335,10 @@ public class ClienteHandler implements Runnable {
                     }
                 }
                 else if (msg.startsWith("EDITAR_PERGUNTA")) {
-                    if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) { out.println("ERRO: PERMISSAO_NEGADA"); continue; }
+                    if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) {
+                        out.println("ERRO: PERMISSAO_NEGADA");
+                        continue;
+                    }
                     String[] p = msg.split(";", 5);
                     if (p.length < 5) { out.println("ERRO:ARGS"); continue; }
 
@@ -294,17 +348,22 @@ public class ClienteHandler implements Runnable {
                         String novoInicio = p[3];
                         String novoFim = p[4];
 
-                        if (!db.perguntaPertenceADocente(perguntaId, sessao.docenteId)) { out.println("ERRO:NAO_PERTENCE"); continue; }
+                        if (!db.perguntaPertenceADocente(perguntaId, sessao.docenteId)) {
+                            out.println("ERRO:NAO_PERTENCE");
+                            continue;
+                        }
 
-                        db.editarPergunta(perguntaId, novoEnunciado, novoInicio, novoFim);
-                        db.incrementarVersao();
-                        out.println("PERGUNTA_EDITADA");
+                        synchronized (db) {
+                            db.editarPergunta(perguntaId, novoEnunciado, novoInicio, novoFim);
+                            int versao = db.incrementarVersao();
+                            out.println("PERGUNTA_EDITADA");
 
-                        String querySql = String.format(
-                            "UPDATE Pergunta SET enunciado='%s', data_inicio='%s', data_fim='%s' WHERE id=%d",
-                            novoEnunciado.replace("'", "''"), novoInicio, novoFim, perguntaId
-                        );
-                        replicator.sendUpdate(db.getVersao(), querySql);
+                            String querySql = String.format(
+                                    "UPDATE Pergunta SET enunciado='%s', data_inicio='%s', data_fim='%s' WHERE id=%d",
+                                    novoEnunciado.replace("'", "''"), novoInicio, novoFim, perguntaId
+                            );
+                            replicator.sendUpdate(versao, querySql);
+                        }
                     } catch (NumberFormatException nfe) {
                         out.println("ERRO:ID_INVALIDO");
                     } catch (SQLException e) {
@@ -313,21 +372,33 @@ public class ClienteHandler implements Runnable {
                     }
                 }
                 else if (msg.startsWith("ELIMINAR_PERGUNTA")) {
-                    if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) { out.println("ERRO: PERMISSAO_NEGADA"); continue; }
+                    if (!sessao.autenticado || !"DOCENTE".equals(sessao.role)) {
+                        out.println("ERRO: PERMISSAO_NEGADA");
+                        continue;
+                    }
                     String[] p = msg.split(";", 2);
                     if (p.length < 2) { out.println("ERRO:ARGS"); continue; }
 
                     try {
                         int perguntaId = Integer.parseInt(p[1]);
-                        if (!db.perguntaPertenceADocente(perguntaId, sessao.docenteId)) { out.println("ERRO:NAO_PERTENCE"); continue; }
+                        if (!db.perguntaPertenceADocente(perguntaId, sessao.docenteId)) {
+                            out.println("ERRO:NAO_PERTENCE");
+                            continue;
+                        }
 
-                        db.eliminarPergunta(perguntaId);
-                        db.incrementarVersao();
-                        out.println("PERGUNTA_ELIMINADA");
+                        synchronized (db) {
+                            db.eliminarPergunta(perguntaId);
+                            out.println("PERGUNTA_ELIMINADA");
 
-                        String q1 = String.format("DELETE FROM Opcao WHERE pergunta_id=%d", perguntaId);
-                        String q2 = String.format("DELETE FROM Pergunta WHERE id=%d", perguntaId);
-                        replicator.sendUpdate(db.getVersao(), q1 + ";" + q2);
+                            String q1 = String.format("DELETE FROM Opcao WHERE pergunta_id=%d", perguntaId);
+                            int v1 = db.incrementarVersao();
+                            replicator.sendUpdate(v1, q1);
+
+                            String q2 = String.format("DELETE FROM Pergunta WHERE id=%d", perguntaId);
+                            int v2 = db.incrementarVersao();
+                            replicator.sendUpdate(v2, q2);
+                        }
+
                     } catch (NumberFormatException nfe) {
                         out.println("ERRO:ID_INVALIDO");
                     } catch (SQLException e) {

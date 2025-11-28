@@ -186,9 +186,6 @@ public class PerguntaDAO {
             }
         }
 
-        pd.estado = calcularEstado(pd.dataInicio, pd.dataFim, 0);
-
-        // Carregar opções
         String sqlOpcoes = "SELECT * FROM Opcao WHERE pergunta_id = ? ORDER BY letra";
         try (PreparedStatement ps = connection.prepareStatement(sqlOpcoes)) {
             ps.setInt(1, pd.id);
@@ -204,6 +201,9 @@ public class PerguntaDAO {
                 }
             }
         }
+
+        int numOpcoes = pd.opcoes.size();
+        pd.estado = calcularEstado(pd.dataInicio, pd.dataFim, numOpcoes);
 
         return pd;
     }

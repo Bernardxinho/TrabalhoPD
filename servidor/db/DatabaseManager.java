@@ -47,15 +47,19 @@ public class DatabaseManager {
         }
     }
 
-    public synchronized void incrementarVersao() {
+    public synchronized int incrementarVersao() {
         Connection conn = null;
         try {
             conn = dbConnection.getConnection();
             SchemaManager.incrementarVersao(conn);
-            System.out.println("[DB] Versão incrementada para: " + getVersao());
+
+            int novaVersao = SchemaManager.getVersao(conn);
+            System.out.println("[DB] Versão incrementada para: " + novaVersao);
+            return novaVersao;
         } catch (Exception e) {
             System.err.println("[DB] Erro ao incrementar versão: " + e.getMessage());
             e.printStackTrace();
+            return 0;
         } finally {
             closeQuietly(conn);
         }
