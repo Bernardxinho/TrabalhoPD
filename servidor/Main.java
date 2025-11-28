@@ -1,13 +1,13 @@
 package servidor;
 
 import servidor.db.DatabaseManager;
-import servidor.db.PerguntaDetalhes;
 import java.net.*;
 import java.sql.*;
-import java.io.IOException;
 import servidor.handlers.ClienteHandler;
-import servidor.ReplicationSender;
-
+import java.io.*;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.nio.file.*;
 
 public class Main {
     private static final String MULTICAST_ADDRESS = "230.30.30.30";
@@ -29,9 +29,7 @@ public class Main {
 
     public static void main(String[] args) {
         String dbPath = "servidor/sistema.db";
-        DatabaseManager db = new DatabaseManager(dbPath);
-        db.connect();
-        db.createTables();
+        DatabaseManager db;
 
         try {
             String ipDiretoria = "127.0.0.1";
@@ -88,6 +86,11 @@ public class Main {
             String hostP = hp[0];
             int portP = Integer.parseInt(hp[1]);
 
+            int portoPrincipalSync = 0;
+            if (hp.length >= 3) {
+                portoPrincipalSync = Integer.parseInt(hp[2]);
+            }
+
             boolean ipEhLocal =
                     hostP.equals("127.0.0.1") ||
                             hostP.equalsIgnoreCase("localhost") ||
@@ -101,6 +104,16 @@ public class Main {
             System.out.printf("[Servidor] Identificação: principal=%s | principalDir=%s | meu=%s:%d%n",
                     ehPrincipal ? "SIM" : "NAO", principalStr, meuIP.getHostAddress(), portoTCPClientes);
 
+            if (!ehPrincipal && portoPrincipalSync != 0) {
+                sincronizarBaseDeDadosComPrincipal(hostP, portoPrincipalSync, dbPath);
+            }
+
+            db = new DatabaseManager(dbPath);
+            db.connect();
+            db.createTables();
+            if (ehPrincipal) {
+                iniciarServidorSync(servidorSync, dbPath);
+            }
 
             // ===== THREAD DE RECEÇÃO DE HEARTBEATS MULTICAST =====
             new Thread(() -> {
@@ -187,6 +200,7 @@ public class Main {
                 }
             }, "HB-Thread").start();
             // ===== TCP CLIENT HANDLER =====
+            // ===== TCP CLIENT HANDLER =====
             new Thread(() -> {
                 try {
                     System.out.println("[Servidor] À escuta de clientes em TCP no porto " + portoTCPClientes);
@@ -206,36 +220,35 @@ public class Main {
                 }
             }, "TCP-Clientes").start();
 
+            // ===== SEED DE DADOS DE TESTE =====
+            try (Connection conn = db.getConnection()) {
+                PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM Docente WHERE email = ?");
+                ps.setString(1, "docente@isec.pt");
+                ResultSet rs = ps.executeQuery();
+                if (rs.next() && rs.getInt(1) == 0) {
+                    String hash = DatabaseManager.hashPassword("1234");
+                    PreparedStatement insert = conn.prepareStatement(
+                            "INSERT INTO Docente(nome, email, password_hash) VALUES (?, ?, ?)");
+                    insert.setString(1, "Docente Exemplo");
+                    insert.setString(2, "docente@isec.pt");
+                    insert.setString(3, hash);
+                    insert.executeUpdate();
+                    System.out.println("[DB] Docente exemplo criado (email: docente@isec.pt | pass: 1234)");
+                }
+            } catch (SQLException e) {
+                System.err.println("[DB] Erro ao inserir docente de teste: " + e.getMessage());
+            }
+
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                db.close();
+                System.out.println("[Servidor] Encerrado com segurança.");
+            }));
+
+            System.out.println("[Servidor] Servidor totalmente operacional! (UDP + TCP + DB + MULTICAST)");
         } catch (Exception e) {
             System.err.println("[Servidor] Erro UDP/TCP inicial: " + e.getMessage());
             e.printStackTrace();
         }
-
-        // ===== SEED DE DADOS DE TESTE =====
-        try (Connection conn = db.getConnection()) {
-            PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM Docente WHERE email = ?");
-            ps.setString(1, "docente@isec.pt");
-            ResultSet rs = ps.executeQuery();
-            if (rs.next() && rs.getInt(1) == 0) {
-                String hash = DatabaseManager.hashPassword("1234");
-                PreparedStatement insert = conn.prepareStatement(
-                        "INSERT INTO Docente(nome, email, password_hash) VALUES (?, ?, ?)");
-                insert.setString(1, "Docente Exemplo");
-                insert.setString(2, "docente@isec.pt");
-                insert.setString(3, hash);
-                insert.executeUpdate();
-                System.out.println("[DB] Docente exemplo criado (email: docente@isec.pt | pass: 1234)");
-            }
-        } catch (SQLException e) {
-            System.err.println("[DB] Erro ao inserir docente de teste: " + e.getMessage());
-        }
-
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            db.close();
-            System.out.println("[Servidor] Encerrado com segurança.");
-        }));
-
-        System.out.println("[Servidor] Servidor totalmente operacional! (UDP + TCP + DB + MULTICAST)");
     }
 
     private static void enviarHeartbeatComQuery(DatagramSocket socket, InetAddress grupoMulticast, int versao, String querySql) {
@@ -340,5 +353,64 @@ public class Main {
                 return rs.next() ? rs.getInt(1) : -1;
             }
         }
+    }
+
+    private static void sincronizarBaseDeDadosComPrincipal(
+            String hostPrincipal,
+            int portoTcpsync,
+            String caminhoDbLocal
+    ) throws IOException {
+
+        Path pathDb = Paths.get(caminhoDbLocal);
+        Files.createDirectories(pathDb.getParent());
+
+        try (Socket s = new Socket(hostPrincipal, portoTcpsync);
+             InputStream in = s.getInputStream();
+             OutputStream out = Files.newOutputStream(
+                     pathDb,
+                     StandardOpenOption.CREATE,
+                     StandardOpenOption.TRUNCATE_EXISTING
+             )) {
+
+            byte[] buffer = new byte[8192];
+            int lido;
+            while ((lido = in.read(buffer)) != -1) {
+                out.write(buffer, 0, lido);
+            }
+        }
+
+        System.out.println("[Sync] Download da BD do principal concluído.");
+    }
+
+    private static void iniciarServidorSync(ServerSocket servidorSync, String caminhoDb) {
+        Thread t = new Thread(() -> {
+            try (ServerSocket ss = servidorSync) {
+                System.out.println("[Sync] Servidor de sync a escutar em " + ss.getLocalPort());
+
+                while (true) {
+                    Socket cli = ss.accept();
+                    System.out.println("[Sync] Pedido de sync de " + cli.getInetAddress());
+
+                    try (OutputStream out = cli.getOutputStream();
+                         InputStream in = new FileInputStream(caminhoDb)) {
+
+                        byte[] buffer = new byte[8192];
+                        int lido;
+                        while ((lido = in.read(buffer)) != -1) {
+                            out.write(buffer, 0, lido);
+                        }
+                        out.flush();
+                    } catch (IOException e) {
+                        System.err.println("[Sync] Erro a enviar BD: " + e.getMessage());
+                    } finally {
+                        try { cli.close(); } catch (IOException ignore) {}
+                    }
+                }
+            } catch (IOException e) {
+                System.err.println("[Sync] Erro no servidor de sync: " + e.getMessage());
+            }
+        });
+        t.setDaemon(true);
+        t.start();
     }
 }
