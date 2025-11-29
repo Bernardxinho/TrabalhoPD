@@ -586,6 +586,7 @@ public class ClienteHandler implements Runnable {
                 sessao.role = null;
                 sessao.docenteId = null;
                 sessao.estudanteId = null;
+                removerClienteDeNotificacoes(out);
                 out.println("LOGOUT_OK");
             }
             else {

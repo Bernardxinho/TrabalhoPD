@@ -97,7 +97,8 @@ public class Main {
                             ? principal.getIp().getHostAddress() + ":" + principal.getPorto() + ":" + ps
                             : principal.getIp().getHostAddress() + ":" + principal.getPorto();
                     enviar(socket, ip, porto, respostaPrincipal);
-                    System.out.println("[Diretoria] Resposta a REGISTO com principal: " + respostaPrincipal);
+                    System.out.println("[Diretoria] Enviou ao SERVIDOR o principal: "
+                            + respostaPrincipal + " para " + ip.getHostAddress() + ":" + porto);
                 }
             }
 
@@ -129,7 +130,8 @@ public class Main {
                             : principal.getIp().getHostAddress() + ":" + principal.getPorto();
 
                     enviar(socket, ip, porto, respostaCliente);
-                    System.out.println("[Diretoria] Enviou ao cliente o servidor principal: " + respostaCliente);
+                    System.out.println("[Diretoria] Enviou ao CLIENTE o principal: "
+                            + respostaCliente + " para " + ip.getHostAddress() + ":" + porto);
                 }
             }
 

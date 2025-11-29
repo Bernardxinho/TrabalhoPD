@@ -374,6 +374,18 @@ public class Main {
                                         System.err.println("[Cliente] Erro ao guardar CSV: " + ioe.getMessage());
                                     }
                                 }
+                                else if (resp.startsWith("INFO:")) {
+                                    String code = resp.substring("INFO:".length());
+
+                                    switch (code) {
+                                        case "NENHUMA_PERGUNTA_ENCONTRADA" ->
+                                                System.out.println("Cliente]Não existe nenhuma pergunta para o filtro selecionado.");
+                                        case "NENHUMA_RESPOSTA" ->
+                                                System.out.println("Cliente]Ainda não tem respostas a perguntas expiradas.");
+                                        default ->
+                                                System.out.println("Cliente][INFO] " + code);
+                                    }
+                                }
                                 else {
                                     System.out.println("[Cliente] " + resp);
                                 }
@@ -412,9 +424,13 @@ public class Main {
                 if (resposta.startsWith("ERRO")) throw new IOException(resposta);
 
                 String[] partes = resposta.split(":");
-                if (partes.length != 2) throw new IOException("Resposta mal formatada da diretoria: " + resposta);
+                if (partes.length < 2) {
+                    throw new IOException("Resposta mal formatada da diretoria: " + resposta);
+                }
+
+                String[] hp = new String[] { partes[0], partes[1] };
                 udp.close();
-                return partes; // [ip, porto]
+                return hp;
             } catch (SocketTimeoutException te) {
                 System.err.println("[Cliente] Sem resposta da diretoria (tentativa " + i + "/" + tentativas + ").");
             }
@@ -424,7 +440,15 @@ public class Main {
     }
 
     private static String lerLinhaComTimeout(BufferedReader in) throws IOException {
-        return in.readLine();
+        String linha;
+        while ((linha = in.readLine()) != null) {
+            if (linha.startsWith("NOTIF:")) {
+                System.out.println("[Cliente] " + linha);
+                continue;
+            }
+            return linha;
+        }
+        return null;
     }
 
     private static void mostrarMenu() {

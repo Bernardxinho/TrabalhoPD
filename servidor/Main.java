@@ -69,19 +69,7 @@ public class Main {
             String resposta = new String(respostaPacket.getData(), 0, respostaPacket.getLength());
             System.out.println("[Servidor] Resposta da diretoria: " + resposta);
 
-            // Determinar se sou o principal
-            byte[] pedidoPrincipal = "PEDIDO_CLIENTE_SERVIDOR".getBytes();
-            DatagramPacket pedPacket = new DatagramPacket(
-                    pedidoPrincipal, pedidoPrincipal.length,
-                    ipDiretoria_addr, portoDiretoria);
-            socket.send(pedPacket);
-
-            byte[] bufResp = new byte[1024];
-            DatagramPacket respPrincipal = new DatagramPacket(bufResp, bufResp.length);
-            socket.receive(respPrincipal);
-            String principal = new String(respPrincipal.getData(), 0, respPrincipal.getLength());
-
-            String principalStr = principal.trim();
+            String principalStr = resposta.trim();
             String[] hp = principalStr.split(":");
             String hostP = hp[0];
             int portP = Integer.parseInt(hp[1]);

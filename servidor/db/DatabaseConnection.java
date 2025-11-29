@@ -24,7 +24,6 @@ public class DatabaseConnection {
                 stmt.execute("PRAGMA busy_timeout=5000;"); // Adicionar timeout
                 stmt.close();
 
-                System.out.println("[DB] Ligado a: " + dbPath);
             } catch (ClassNotFoundException e) {
                 System.err.println("[DB] Driver SQLite não encontrado: " + e.getMessage());
             } catch (SQLException e) {
@@ -37,7 +36,6 @@ public class DatabaseConnection {
         synchronized (lock) {
             try {
                 if (connection == null || connection.isClosed()) {
-                    System.err.println("[DB] Conexão fechada, a reconectar...");
                     connect();
                 }
             } catch (SQLException e) {
@@ -58,7 +56,6 @@ public class DatabaseConnection {
             try {
                 if (connection != null && !connection.isClosed()) {
                     connection.close();
-                    System.out.println("[DB] Conexão fechada.");
                 }
             } catch (SQLException e) {
                 System.err.println("[DB] Erro ao fechar ligação: " + e.getMessage());
