@@ -24,7 +24,6 @@ public class ReplicationSender {
         this.portoTCPSync = portoTCPSync;
     }
 
-    /** Envia HEARTBEAT_UPDATE:<versao>:<portoCli>:<portoSync>:QUERY:<sql> */
     public void sendUpdate(int versao, String querySql) {
         try {
             String msg = "HEARTBEAT_UPDATE:" + versao + ":"

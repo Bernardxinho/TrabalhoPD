@@ -45,18 +45,22 @@ public class Main {
     }
 
     private static void processarMensagem(DatagramSocket socket, String mensagem, InetAddress ip, int porto) {
-        int portoTCP = -1;        // porto para clientes
-        int portoTCPSync = -1;    // porto de sync
+        int portoTCP = -1;       
+        int portoTCPSync = -1;   
 
-        try {
+         try {
             if (mensagem.startsWith("REGISTO:")) {
                 String[] p = mensagem.split(":");
                 if (p.length >= 2) portoTCP = Integer.parseInt(p[1]);
                 if (p.length >= 3) portoTCPSync = Integer.parseInt(p[2]);
             } else if (mensagem.startsWith("HEARTBEAT:")) {
                 String[] p = mensagem.split(":");
-                if (p.length >= 3) portoTCP = Integer.parseInt(p[2]);   // porto clientes
-                if (p.length >= 4) portoTCPSync = Integer.parseInt(p[3]); // porto sync
+                if (p.length >= 3) portoTCP = Integer.parseInt(p[2]);  
+                if (p.length >= 4) portoTCPSync = Integer.parseInt(p[3]); 
+            } else if (mensagem.startsWith("UNREGISTO:")) {
+                String[] p = mensagem.split(":");
+                if (p.length >= 2) portoTCP = Integer.parseInt(p[1]);  
+                if (p.length >= 3) portoTCPSync = Integer.parseInt(p[2]);
             }
         } catch (NumberFormatException e) {
             System.err.println("[Diretoria] Erro a ler porto: " + mensagem);
@@ -102,12 +106,21 @@ public class Main {
                 }
             }
 
-            else if (mensagem.equals("HEARTBEAT") || mensagem.startsWith("HEARTBEAT:")) {
+           else if (mensagem.equals("HEARTBEAT") || mensagem.startsWith("HEARTBEAT:")) {
+                final boolean[] ehPrincipalAgora = { false };
+
                 existente.ifPresentOrElse(s -> {
                     s.atualizarHeartbeat();
                     hbCount++;
 
-                    if (VERBOSE_HB) {
+                    // Verificar se este servidor é o principal atual (primeiro da lista)
+                    synchronized (servidoresAtivos) {
+                        if (!servidoresAtivos.isEmpty()) {
+                            ServidorInfo principalAtual = servidoresAtivos.get(0);
+                            if (principalAtual.getIp().equals(ip) && principalAtual.getPorto() == portoChave) {
+                                ehPrincipalAgora[0] = true;
+                            }
+                        }
                     }
                 }, () -> {
                     if (VERBOSE_HB) {
@@ -116,7 +129,41 @@ public class Main {
                     }
                 });
 
-                enviar(socket, ip, porto, "ACK_HEARTBEAT");
+                String ack = "ACK_HEARTBEAT:" + (ehPrincipalAgora[0] ? "PRINCIPAL" : "SECUNDARIO");
+                try {
+                    enviar(socket, ip, porto, ack);
+                } catch (Exception e) {
+                    System.err.println("[Diretoria] Erro a enviar ACK_HEARTBEAT: " + e.getMessage());
+                }
+            }
+
+            
+            else if (mensagem.startsWith("UNREGISTO:")) {
+                synchronized (servidoresAtivos) {
+                    Optional<ServidorInfo> existenteUnreg = servidoresAtivos.stream()
+                            .filter(s -> s.getIp().equals(ip) && s.getPorto() == portoChave)
+                            .findFirst();
+
+                    if (existenteUnreg.isPresent()) {
+                        ServidorInfo removido = existenteUnreg.get();
+                        servidoresAtivos.remove(removido);
+                        System.out.println("[Diretoria] Servidor removido por UNREGISTO: "
+                                + removido.getIp().getHostAddress() + ":" + removido.getPorto());
+
+                        if (!servidoresAtivos.isEmpty()) {
+                            ServidorInfo novoPrincipal = servidoresAtivos.get(0);
+                            System.out.println("[Diretoria] Novo principal após UNREGISTO: "
+                                    + novoPrincipal.getIp().getHostAddress() + ":" + novoPrincipal.getPorto());
+                        }
+
+                        mostrarServidores();
+                        enviar(socket, ip, porto, "ACK_UNREGISTO");
+                    } else {
+                        System.out.println("[Diretoria] UNREGISTO de servidor não registado: "
+                                + ip.getHostAddress() + ":" + portoChave);
+                        enviar(socket, ip, porto, "ERRO_UNREGISTO_DESCONHECIDO");
+                    }
+                }
             }
 
             else if (mensagem.equals("PEDIDO_CLIENTE_SERVIDOR")) {
