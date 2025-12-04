@@ -11,19 +11,10 @@ public class Main {
     private static final String MULTICAST_ADDRESS = "230.30.30.30";
     private static final int MULTICAST_PORT = 3030;
 
-    // Variáveis partilhadas entre threads
     private static volatile boolean ehPrincipal = false;
     private static volatile int portoTCPClientes = 0;
     private static volatile int portoTCPSync = 0;
     private static InetAddress meuIP;
-
-
-    private static class Sessao {
-        boolean autenticado = false;
-        String role = null;          
-        Integer docenteId = null;
-        Integer estudanteId = null;
-    }
 
     public static void main(String[] args) {
       
@@ -301,25 +292,6 @@ public class Main {
         }
     }
 
-    private static void enviarHeartbeatComQuery(DatagramSocket socket, InetAddress grupoMulticast, int versao, String querySql) {
-        try {
-            String hbMsg = "HEARTBEAT_UPDATE:" + versao + ":" + portoTCPClientes + ":" + portoTCPSync + ":QUERY:" + querySql;
-            byte[] hbBytes = hbMsg.getBytes();
-
-            DatagramPacket multicastPacket = new DatagramPacket(
-                    hbBytes,
-                    hbBytes.length,
-                    grupoMulticast,
-                    MULTICAST_PORT
-            );
-            socket.send(multicastPacket);
-            System.out.println("[Servidor] Heartbeat UPDATE enviado via multicast (versão: " + versao + ")");
-            System.out.println("           Query: " + querySql);
-        } catch (Exception e) {
-            System.err.println("[Servidor] Erro ao enviar heartbeat com query: " + e.getMessage());
-        }
-    }
-
     private static void processarHeartbeatMulticast(String mensagem, DatabaseManager db) {
         try {
             if (mensagem.startsWith("HEARTBEAT_UPDATE:")) {
@@ -403,16 +375,6 @@ public class Main {
             }
         } catch (Exception ignore) {}
         return false;
-    }
-
-    private static int getEstudanteId(DatabaseManager db, String email) throws SQLException {
-        try (PreparedStatement ps = db.getConnection()
-                .prepareStatement("SELECT id FROM Estudante WHERE email=?")) {
-            ps.setString(1, email);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getInt(1) : -1;
-            }
-        }
     }
 
     private static void sincronizarBaseDeDadosComPrincipal(

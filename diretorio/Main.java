@@ -23,10 +23,6 @@ public class Main {
 
             new Thread(Main::verificarInatividade, "PD-Check-Inativos").start();
 
-            if (!VERBOSE_HB) {
-                new Thread(Main::resumoPeriodico, "PD-Resumo-60s").start();
-            }
-
             byte[] buffer = new byte[1024];
             while (true) {
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
@@ -243,33 +239,6 @@ public class Main {
 
             } catch (Exception e) {
                 System.err.println("[Diretoria] Erro ao verificar inatividade: " + e.getMessage());
-            }
-        }
-    }
-
-    private static void resumoPeriodico() {
-        while (true) {
-            try {
-                Thread.sleep(60_000); 
-                ServidorInfo principal;
-                int ativos;
-
-                synchronized (servidoresAtivos) {
-                    ativos = servidoresAtivos.size();
-                    principal = ativos == 0 ? null : servidoresAtivos.get(0);
-                }
-
-                String linha = (principal == null)
-                        ? "[Diretoria] Resumo: 0 servidores ativos | HB/min=" + hbCount
-                        : "[Diretoria] Resumo: " + ativos + " ativos | Principal: "
-                        + principal.getIp().getHostAddress() + ":" + principal.getPorto()
-                        + " | HB/min=" + hbCount;
-
-                System.out.println(linha);
-                hbCount = 0;
-            } catch (InterruptedException ignore) { }
-            catch (Exception e) {
-                System.err.println("[Diretoria] Erro no resumo: " + e.getMessage());
             }
         }
     }
