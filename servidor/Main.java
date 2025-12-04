@@ -96,7 +96,18 @@ public class Main {
 
             byte[] buffer = new byte[1024];
             DatagramPacket respostaPacket = new DatagramPacket(buffer, buffer.length);
-            socket.receive(respostaPacket);
+
+            socket.setSoTimeout(3000);
+
+            try {
+                socket.receive(respostaPacket);
+            } catch (SocketTimeoutException e) {
+                System.err.println("[Servidor] ERRO: Diretoria não respondeu no tempo limite (3s).");
+                System.err.println("[Servidor] A terminar conforme o enunciado exige.");
+                return; // TERMINA O SERVIDOR!
+            }
+
+            socket.setSoTimeout(0);
             String resposta = new String(respostaPacket.getData(), 0, respostaPacket.getLength());
             System.out.println("[Servidor] Resposta da diretoria: " + resposta);
 
