@@ -69,7 +69,7 @@ public class Main {
         final int portoChave = (portoTCP > -1) ? portoTCP : porto;
 
         Optional<ServidorInfo> existente = servidoresAtivos.stream()
-                .filter(s -> s.getIp().equals(ip) && s.getPorto() == portoChave)
+                .filter(s -> s.getPorto() == portoChave)
                 .findFirst();
 
         try {
@@ -106,18 +106,23 @@ public class Main {
                 }
             }
 
-           else if (mensagem.equals("HEARTBEAT") || mensagem.startsWith("HEARTBEAT:")) {
+            else if (mensagem.equals("HEARTBEAT") || mensagem.startsWith("HEARTBEAT:")) {
                 final boolean[] ehPrincipalAgora = { false };
 
                 existente.ifPresentOrElse(s -> {
                     s.atualizarHeartbeat();
                     hbCount++;
 
-                    // Verificar se este servidor é o principal atual (primeiro da lista)
+                    if (VERBOSE_HB) {
+                        System.out.println("[Diretoria] HEARTBEAT recebido de "
+                                + ip.getHostAddress() + ":" + portoChave
+                                + " (lastSeen=" + s.getUltimaAtualizacao().format(FMT_HHMMSS) + ")");
+                    }
+
                     synchronized (servidoresAtivos) {
                         if (!servidoresAtivos.isEmpty()) {
                             ServidorInfo principalAtual = servidoresAtivos.get(0);
-                            if (principalAtual.getIp().equals(ip) && principalAtual.getPorto() == portoChave) {
+                            if (principalAtual.getPorto() == portoChave) {
                                 ehPrincipalAgora[0] = true;
                             }
                         }
@@ -130,18 +135,14 @@ public class Main {
                 });
 
                 String ack = "ACK_HEARTBEAT:" + (ehPrincipalAgora[0] ? "PRINCIPAL" : "SECUNDARIO");
-                try {
-                    enviar(socket, ip, porto, ack);
-                } catch (Exception e) {
-                    System.err.println("[Diretoria] Erro a enviar ACK_HEARTBEAT: " + e.getMessage());
-                }
+                enviar(socket, ip, porto, ack);
             }
 
-            
+
             else if (mensagem.startsWith("UNREGISTO:")) {
                 synchronized (servidoresAtivos) {
                     Optional<ServidorInfo> existenteUnreg = servidoresAtivos.stream()
-                            .filter(s -> s.getIp().equals(ip) && s.getPorto() == portoChave)
+                            .filter(s -> s.getPorto() == portoChave)
                             .findFirst();
 
                     if (existenteUnreg.isPresent()) {

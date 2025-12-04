@@ -156,7 +156,6 @@ public class Main {
                      SocketAddress grupoAddr = new InetSocketAddress(grupo, MULTICAST_PORT);
                     NetworkInterface netInterface = NetworkInterface.getByInetAddress(InetAddress.getLocalHost());
                     multicastSocket.joinGroup(grupoAddr, netInterface);
- 
 
                     System.out.println("[Servidor] À escuta de heartbeats multicast em " + MULTICAST_ADDRESS + ":" + MULTICAST_PORT);
 
@@ -210,6 +209,8 @@ public class Main {
                             portoDiretoriaFinal
                     );
                     socket.send(hbPacket);
+                    System.out.println("[Servidor] HEARTBEAT enviado para diretoria (versão="
+                            + versaoAtual + ", portoTCP=" + portoTCPClientes + ")");
 
                     // Tentar ler o ACK_HEARTBEAT
                     try {
@@ -292,29 +293,6 @@ public class Main {
             } catch (SQLException e) {
                 System.err.println("[DB] Erro ao inserir docente de teste: " + e.getMessage());
             }
-
-          Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            try (DatagramSocket s = new DatagramSocket()) {
-                String msg = "UNREGISTO:" + portoTCPClientes + ":" + portoTCPSync;
-                byte[] dadosU = msg.getBytes();
-
-                DatagramPacket pU = new DatagramPacket(
-                        dadosU,
-                        dadosU.length,
-                        InetAddress.getByName(ipDiretoriaFinal),
-                        portoDiretoriaFinal
-                );
-
-                s.send(pU);
-                System.out.println("[Servidor] Pedido de remoção enviado à diretoria (UNREGISTO).");
-            } catch (Exception ex) {
-                System.err.println("[Servidor] Falha ao enviar UNREGISTO: " + ex.getMessage());
-            }
-
-            db.close();
-            System.out.println("[Servidor] Encerrado com segurança.");
-        }));
-
 
             System.out.println("[Servidor] Servidor totalmente operacional! (UDP + TCP + DB + MULTICAST)");
         } catch (Exception e) {
