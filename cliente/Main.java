@@ -335,7 +335,6 @@ public class Main {
 
                 Thread.sleep(TIMEOUT_RECONEXAO_MS);
 
-                System.out.println("[Cliente] Segunda tentativa de obter servidor principal...");
                 hp = pedirServidorPrincipal(ipDiretoria, portoDiretoria, 3000, 3);
                 novoIp = hp[0];
                 novoPorto = Integer.parseInt(hp[1]);

@@ -66,24 +66,48 @@ public class ClienteHandler implements Runnable {
 
             out = pw;
 
-            while (true) {
-                String msg;
-                try {
-                    msg = in.readLine();
-                } catch (SocketTimeoutException ste) {
-                    System.out.println("[Servidor] Cliente inativo há 30s, a fechar ligação.");
-                    break;
-                }
+            // 1) Timeout só para a PRIMEIRA mensagem (credenciais)
+            cliente.setSoTimeout(30_000);
 
-                if (msg == null) {
-                    System.out.println("[Servidor] Cliente desligou.");
-                    break;
-                }
+            String msgInicial;
+            try {
+                msgInicial = in.readLine();
+            } catch (SocketTimeoutException ste) {
+                System.out.println("[Servidor] Cliente não enviou credenciais em 30s, a fechar ligação.");
+                return;
+            }
 
+            if (msgInicial == null) {
+                System.out.println("[Servidor] Cliente fechou ligação antes de autenticar.");
+                return;
+            }
+
+            System.out.println("[Servidor] Recebido do cliente (1ª msg): " + msgInicial);
+
+            if (!(msgInicial.startsWith("LOGIN_DOCENTE")
+                    || msgInicial.startsWith("LOGIN_ESTUDANTE")
+                    || msgInicial.startsWith("REGISTAR_DOCENTE")
+                    || msgInicial.startsWith("REGISTAR_ESTUDANTE"))) {
+                out.println("ERRO:AUTENTICACAO_OBRIGATORIA");
+                return;
+            }
+
+            processarMensagem(msgInicial, sessao, in, out);
+
+            if ((msgInicial.startsWith("LOGIN_DOCENTE") || msgInicial.startsWith("LOGIN_ESTUDANTE"))
+                    && !sessao.autenticado) {
+                return;
+            }
+
+            cliente.setSoTimeout(0);
+
+            String msg;
+            while ((msg = in.readLine()) != null) {
                 System.out.println("[Servidor] Recebido do cliente: " + msg);
                 processarMensagem(msg, sessao, in, out);
             }
 
+            System.out.println("[Servidor] Cliente desligou.");
         } catch (Exception e) {
             System.err.println("[Servidor] Erro ao processar cliente: " + e.getMessage());
             e.printStackTrace();
