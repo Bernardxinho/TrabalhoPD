@@ -99,6 +99,7 @@ public class ClienteHandler implements Runnable {
                 return;
             }
 
+            // Tirar timeout depois da autenticação
             cliente.setSoTimeout(0);
 
             String msg;
@@ -108,6 +109,11 @@ public class ClienteHandler implements Runnable {
             }
 
             System.out.println("[Servidor] Cliente desligou.");
+
+        } catch (java.net.SocketException e) {
+            // Caso típico: "Connection reset" quando o cliente fecha de forma abrupta
+            System.out.println("[Servidor] Ligação terminada abruptamente pelo cliente: "
+                    + cliente.getInetAddress().getHostAddress());
         } catch (Exception e) {
             System.err.println("[Servidor] Erro ao processar cliente: " + e.getMessage());
             e.printStackTrace();
@@ -115,10 +121,12 @@ public class ClienteHandler implements Runnable {
             if (out != null) {
                 removerClienteDeNotificacoes(out);
             }
-            try { cliente.close(); } catch (Exception ignore) {}
+            try {
+                cliente.close();
+            } catch (Exception ignore) {
+            }
         }
     }
-
 
     private void processarMensagem(String msg, Sessao sessao, BufferedReader in, PrintWriter out) {
         try {

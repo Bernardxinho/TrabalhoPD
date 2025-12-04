@@ -331,7 +331,6 @@ public class Main {
 
             if (novoIp.equals(ultimoServidorIp) && novoPorto == ultimoServidorPorto) {
                 System.out.println("[Cliente] Diretoria devolveu o mesmo servidor.");
-                System.out.println("[Cliente] Aguardando 20 segundos antes de segunda tentativa...");
 
                 Thread.sleep(TIMEOUT_RECONEXAO_MS);
 

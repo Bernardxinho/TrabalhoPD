@@ -321,7 +321,7 @@ public class Main {
     }
 
     private static void processarHeartbeatMulticast(String mensagem, DatabaseManager db) {
-         try {
+        try {
             if (mensagem.startsWith("HEARTBEAT_UPDATE:")) {
                 String[] partes = mensagem.split(":", 6);
 
@@ -334,15 +334,24 @@ public class Main {
                 String query = partes[5];
 
                 int versaoLocal = db.getVersao();
+                System.out.println("[Multicast] Update recebido - Versão recebida: "
+                        + versaoRecebida + " | Versão local: " + versaoLocal);
 
-                System.out.println("[Multicast] Update recebido - Versão recebida: " + versaoRecebida + " | Versão local: " + versaoLocal);
+                // 1) Update antigo / duplicado → ignora
+                if (versaoRecebida <= versaoLocal) {
+                    System.out.println("[Multicast] Update antigo/duplicado, a ignorar.");
+                    return;
+                }
 
-                if (versaoRecebida != versaoLocal + 1) {
-                    System.err.println("[Multicast] PERDA DE SINCRONIZAÇÃO! Esperava versão " + (versaoLocal + 1) + ", recebi " + versaoRecebida);
+                // 2) Salto de versões → perda de sincronização
+                if (versaoRecebida > versaoLocal + 1) {
+                    System.err.println("[Multicast] PERDA DE SINCRONIZAÇÃO! Esperava versão "
+                            + (versaoLocal + 1) + ", recebi " + versaoRecebida);
                     System.err.println("[Multicast] Servidor vai terminar!");
                     System.exit(1);
                 }
 
+                // 3) Caso normal: exatamente versaoLocal + 1
                 try {
                     db.executarQuery(query);
                     db.incrementarVersao();
@@ -356,7 +365,7 @@ public class Main {
                     System.exit(1);
                 }
 
-        } else if (mensagem.startsWith("HEARTBEAT:")) {
+            } else if (mensagem.startsWith("HEARTBEAT:")) {
                 String[] partes = mensagem.split(":");
 
                 if (partes.length < 4) {
@@ -367,7 +376,8 @@ public class Main {
                 int versaoLocal = db.getVersao();
 
                 if (versaoRecebida != versaoLocal) {
-                    System.err.println("[Multicast] Versões diferentes! Local: " + versaoLocal + ", Principal: " + versaoRecebida);
+                    System.err.println("[Multicast] Versões diferentes! Local: " + versaoLocal
+                            + ", Principal: " + versaoRecebida);
                     System.err.println("[Multicast] PERDA DE SINCRONIZAÇÃO! Servidor vai terminar!");
                     System.exit(1);
                 }
