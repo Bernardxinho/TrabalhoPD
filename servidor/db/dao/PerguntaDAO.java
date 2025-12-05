@@ -81,14 +81,12 @@ public class PerguntaDAO {
             throw new SQLException("Não é possível eliminar: pergunta já tem respostas");
         }
 
-        // Eliminar opções primeiro
         String sqlOpcoes = "DELETE FROM Opcao WHERE pergunta_id = ?";
         try (PreparedStatement ps = connection.prepareStatement(sqlOpcoes)) {
             ps.setInt(1, perguntaId);
             ps.executeUpdate();
         }
 
-        // Eliminar pergunta
         String sql = "DELETE FROM Pergunta WHERE id = ?";
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setInt(1, perguntaId);
@@ -244,7 +242,6 @@ public class PerguntaDAO {
             }
         }
 
-        // Carregar opções com contagens
         String sqlOpcoes = "SELECT * FROM Opcao WHERE pergunta_id = ? ORDER BY letra";
         try (PreparedStatement ps = connection.prepareStatement(sqlOpcoes)) {
             ps.setInt(1, perguntaId);
@@ -273,7 +270,6 @@ public class PerguntaDAO {
             }
         }
 
-        // Carregar respostas
         String sqlRespostas = "SELECT r.opcao_letra, r.data_hora, " +
                 "e.id as est_id, e.numero, e.nome, e.email, " +
                 "o.is_correta " +

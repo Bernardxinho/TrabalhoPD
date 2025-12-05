@@ -5,8 +5,8 @@ import java.time.LocalDateTime;
 
 public class ServidorInfo {
     private final InetAddress ip;
-    private final int porto;        // porto TCP para clientes (já existia)
-    private final int portoSync;    // NOVO: porto TCP para sync entre servidores
+    private final int porto;
+    private final int portoSync;
     private LocalDateTime ultimaAtualizacao;
 
     public ServidorInfo(InetAddress ip, int porto) { this(ip, porto, -1); }

@@ -80,7 +80,6 @@ public class SchemaManager {
         stmt.execute(opcoes);
         stmt.execute(respostas);
 
-        // Inicializar configuração se não existir
         String checkConfig = "SELECT COUNT(*) FROM Configuracao";
         ResultSet rs = stmt.executeQuery(checkConfig);
         if (rs.next() && rs.getInt(1) == 0) {

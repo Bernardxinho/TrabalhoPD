@@ -22,7 +22,6 @@ public class ClienteHandler implements Runnable {
     private final DatabaseManager db;
     private final ReplicationSender replicator;
 
-    // Conjunto de clientes autenticados para notificações assíncronas
     private static final Set<PrintWriter> clientesNotificaveis =
             Collections.synchronizedSet(new HashSet<>());
 
@@ -34,7 +33,7 @@ public class ClienteHandler implements Runnable {
 
     private static class Sessao {
         boolean autenticado = false;
-        String role = null;         // "DOCENTE" ou "ESTUDANTE"
+        String role = null;
         Integer docenteId = null;
         Integer estudanteId = null;
     }
@@ -66,7 +65,6 @@ public class ClienteHandler implements Runnable {
 
             out = pw;
 
-            // 1) Timeout só para a PRIMEIRA mensagem (credenciais)
             cliente.setSoTimeout(30_000);
 
             String msgInicial;
@@ -99,7 +97,6 @@ public class ClienteHandler implements Runnable {
                 return;
             }
 
-            // Tirar timeout depois da autenticação
             cliente.setSoTimeout(0);
 
             String msg;
@@ -111,7 +108,6 @@ public class ClienteHandler implements Runnable {
             System.out.println("[Servidor] Cliente desligou.");
 
         } catch (java.net.SocketException e) {
-            // Caso típico: "Connection reset" quando o cliente fecha de forma abrupta
             System.out.println("[Servidor] Ligação terminada abruptamente pelo cliente: "
                     + cliente.getInetAddress().getHostAddress());
         } catch (Exception e) {

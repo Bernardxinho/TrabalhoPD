@@ -21,7 +21,6 @@ public class OpcaoDAO {
     }
 
     public void editar(int opcaoId, int perguntaId, String novoTexto, boolean novaCorreta) throws SQLException {
-        // Verificar se pergunta tem respostas
         String sqlCheck = "SELECT COUNT(*) as total FROM Resposta WHERE pergunta_id = ?";
         try (PreparedStatement ps = connection.prepareStatement(sqlCheck)) {
             ps.setInt(1, perguntaId);

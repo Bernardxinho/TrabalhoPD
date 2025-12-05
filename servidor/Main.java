@@ -38,7 +38,6 @@ public class Main {
 
             final String ipDiretoriaFinal = ipDiretoria;
             final int portoDiretoriaFinal = portoDiretoria;
-            // Construir caminho completo para o ficheiro .db
             Path pastaBDPath = Paths.get(pastaBD);
             try {
                 Files.createDirectories(pastaBDPath);
@@ -68,7 +67,6 @@ public class Main {
 
             System.out.println("[Servidor] Portos TCP atribuídos -> Clientes: " + portoTCPClientes + " | Sync: " + portoTCPSync);
 
-            // ===== PREPARAR MULTICAST =====
             InetAddress grupoMulticast = InetAddress.getByName(MULTICAST_ADDRESS);
 
                 ReplicationSender replicator = new ReplicationSender(
@@ -95,7 +93,7 @@ public class Main {
             } catch (SocketTimeoutException e) {
                 System.err.println("[Servidor] ERRO: Diretoria não respondeu no tempo limite (3s).");
                 System.err.println("[Servidor] A terminar conforme o enunciado exige.");
-                return; // TERMINA O SERVIDOR!
+                return;
             }
 
             socket.setSoTimeout(0);
@@ -136,8 +134,6 @@ public class Main {
                 iniciarServidorSync(servidorSync, dbPath, db);
             }
 
-
-            // ===== THREAD DE RECEÇÃO DE HEARTBEATS MULTICAST =====
             new Thread(() -> {
                 MulticastSocket multicastSocket = null;
                 try {
@@ -159,8 +155,8 @@ public class Main {
                         String mensagemRecebida = new String(packetMcast.getData(), 0, packetMcast.getLength());
                         InetAddress remetenteIP = packetMcast.getAddress();
 
-/*                     System.out.println("[Multicast] Recebido de " + remetenteIP.getHostAddress() + ": " + mensagemRecebida);
- */
+                     System.out.println("[Multicast] Recebido de " + remetenteIP.getHostAddress() + ": " + mensagemRecebida);
+
                      if (!ehPrincipal) {
                         synchronized (db) {
                             processarHeartbeatMulticast(mensagemRecebida, db);
@@ -178,8 +174,6 @@ public class Main {
                 }
             }, "Multicast-Receiver").start();
 
-            // ===== HEARTBEAT THREAD (UDP + MULTICAST) =====
-            // ===== HEARTBEAT THREAD (UDP + MULTICAST) =====
          new Thread(() -> {
             try {
                 byte[] bufAck = new byte[256];
@@ -203,9 +197,8 @@ public class Main {
                     System.out.println("[Servidor] HEARTBEAT enviado para diretoria (versão="
                             + versaoAtual + ", portoTCP=" + portoTCPClientes + ")");
 
-                    // Tentar ler o ACK_HEARTBEAT
                     try {
-                        socket.setSoTimeout(1000); // 1 segundo à espera do ACK
+                        socket.setSoTimeout(1000);
                         socket.receive(ackPacket);
                         String ackStr = new String(ackPacket.getData(), 0, ackPacket.getLength());
 
@@ -219,14 +212,12 @@ public class Main {
                             }
                         }
                     } catch (SocketTimeoutException ste) {
-                        // Não recebeu ACK a tempo -> ignora
                     } catch (Exception ex) {
                         System.err.println("[Servidor] Erro ao receber ACK_HEARTBEAT: " + ex.getMessage());
                     } finally {
-                        socket.setSoTimeout(0); // volta a bloquear "normalmente" para outras operações se for preciso
+                        socket.setSoTimeout(0);
                     }
 
-                    // Heartbeat multicast (só o principal é que manda)
                     if (ehPrincipal) {
                         try {
                             DatagramPacket multicastPacket = new DatagramPacket(
@@ -246,7 +237,6 @@ public class Main {
             }
         }, "HB-Thread").start();
 
-            // ===== TCP CLIENT HANDLER =====
             new Thread(() -> {
                 try {
                     System.out.println("[Servidor] À escuta de clientes em TCP no porto " + portoTCPClientes);
@@ -266,7 +256,6 @@ public class Main {
                 }
             }, "TCP-Clientes").start();
 
-            // ===== SEED DE DADOS DE TESTE =====
             try (Connection conn = db.getConnection()) {
                 PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM Docente WHERE email = ?");
                 ps.setString(1, "docente@isec.pt");
@@ -308,22 +297,16 @@ public class Main {
                 int versaoLocal = db.getVersao();
                 System.out.println("[Multicast] Update recebido - Versão recebida: "
                         + versaoRecebida + " | Versão local: " + versaoLocal);
-
-                // 1) Update antigo / duplicado → ignora
                 if (versaoRecebida <= versaoLocal) {
                     System.out.println("[Multicast] Update antigo/duplicado, a ignorar.");
                     return;
                 }
-
-                // 2) Salto de versões → perda de sincronização
                 if (versaoRecebida > versaoLocal + 1) {
                     System.err.println("[Multicast] PERDA DE SINCRONIZAÇÃO! Esperava versão "
                             + (versaoLocal + 1) + ", recebi " + versaoRecebida);
                     System.err.println("[Multicast] Servidor vai terminar!");
                     System.exit(1);
                 }
-
-                // 3) Caso normal: exatamente versaoLocal + 1
                 try {
                     db.executarQuery(query);
                     db.incrementarVersao();

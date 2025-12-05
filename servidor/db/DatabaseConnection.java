@@ -21,7 +21,7 @@ public class DatabaseConnection {
                 Statement stmt = connection.createStatement();
                 stmt.execute("PRAGMA journal_mode=WAL;");
                 stmt.execute("PRAGMA synchronous=NORMAL;");
-                stmt.execute("PRAGMA busy_timeout=5000;"); // Adicionar timeout
+                stmt.execute("PRAGMA busy_timeout=5000;");
                 stmt.close();
 
             } catch (ClassNotFoundException e) {
@@ -40,7 +40,6 @@ public class DatabaseConnection {
                 }
             } catch (SQLException e) {
                 System.err.println("[DB] Erro ao verificar conexão: " + e.getMessage());
-                // Tentar reconectar em caso de erro
                 try {
                     connect();
                 } catch (Exception ex) {

@@ -1,4 +1,3 @@
-// src/servidor/ReplicationSender.java
 package servidor;
 
 import java.net.DatagramPacket;

@@ -7,10 +7,10 @@ import java.util.Scanner;
 public class Main {
     private static final String DEF_IP_DIR = "127.0.0.1";
     private static final int DEF_PORT_DIR = 4000;
-    private static final int TIMEOUT_RECONEXAO_MS = 20000; // 20 segundos
+    private static final int TIMEOUT_RECONEXAO_MS = 20000;
 
     private static class Credenciais {
-        String tipo;      // "DOCENTE" ou "ESTUDANTE"
+        String tipo;
         String email;
         String password;
         boolean autenticado = false;
@@ -51,7 +51,7 @@ public class Main {
 
                 socketTCP = new Socket();
                 socketTCP.connect(new InetSocketAddress(ipServidor, portoServidor), 4000);
-                socketTCP.setSoTimeout(30000); // 30s para primeira mensagem
+                socketTCP.setSoTimeout(30000);
                 System.out.println("[Cliente] ✓ Ligado ao servidor via TCP!");
 
                 in = new BufferedReader(new InputStreamReader(socketTCP.getInputStream()));
@@ -65,7 +65,7 @@ public class Main {
                     if ("LOGIN_OK".equals(respAuth)) {
                         System.out.println("[Cliente] ✓ Re-autenticação bem-sucedida!");
                         credenciais.autenticado = true;
-                        socketTCP.setSoTimeout(0); // Remove timeout após autenticação
+                        socketTCP.setSoTimeout(0);
                     } else {
                         System.out.println("[Cliente] ✗ Falha na re-autenticação. Faça login novamente.");
                         credenciais.autenticado = false;
@@ -88,7 +88,7 @@ public class Main {
                     String wire = null;
 
                     switch (op) {
-                        case "1": { // Login docente
+                        case "1": {
                             System.out.print("Email docente: ");
                             String email = sc.nextLine().trim();
                             System.out.print("Password: ");
@@ -98,7 +98,7 @@ public class Main {
                             credenciais = new Credenciais("DOCENTE", email, pass);
                             break;
                         }
-                        case "2": { // Login estudante
+                        case "2": {
                             System.out.print("Email estudante: ");
                             String email = sc.nextLine().trim();
                             System.out.print("Password: ");
@@ -108,7 +108,7 @@ public class Main {
                             credenciais = new Credenciais("ESTUDANTE", email, pass);
                             break;
                         }
-                        case "3": { // Criar pergunta
+                        case "3": {
                             System.out.print("Enunciado: ");
                             String enun  = sc.nextLine().trim();
                             System.out.print("Início (AAAA-MM-DD HH:mm): ");
@@ -118,7 +118,7 @@ public class Main {
                             wire = "CRIAR_PERGUNTA;" + enun + ";" + ini + ";" + fim;
                             break;
                         }
-                        case "4": { // Adicionar opção
+                        case "4": {
                             System.out.print("Pergunta ID: ");
                             String pid   = sc.nextLine().trim();
                             System.out.print("Letra (a/b/c): ");
@@ -132,13 +132,13 @@ public class Main {
                             wire = "ADICIONAR_OPCAO;" + pid + ";" + letra + ";" + txt + ";" + ok;
                             break;
                         }
-                        case "5": { // Obter pergunta por código
+                        case "5": {
                             System.out.print("Código da pergunta: ");
                             String codigo = sc.nextLine().trim();
                             wire = "OBTER_PERGUNTA_CODIGO;" + codigo;
                             break;
                         }
-                        case "6": { // Registar docente
+                        case "6": {
                             System.out.print("Nome: ");
                             String nome = sc.nextLine().trim();
                             System.out.print("Email: ");
@@ -150,7 +150,7 @@ public class Main {
                             wire = "REGISTAR_DOCENTE;" + nome + ";" + email + ";" + pass + ";" + cod;
                             break;
                         }
-                        case "7": { // Registar estudante
+                        case "7": {
                             System.out.print("Número: ");
                             String num  = sc.nextLine().trim();
                             System.out.print("Nome: ");
@@ -162,7 +162,7 @@ public class Main {
                             wire = "REGISTAR_ESTUDANTE;" + num + ";" + nome + ";" + email + ";" + pass;
                             break;
                         }
-                        case "8": { // Listar perguntas
+                        case "8": {
                             System.out.println("\n--- Filtrar por estado ---");
                             System.out.println("  1) Todas");
                             System.out.println("  2) Ativas");
@@ -180,7 +180,7 @@ public class Main {
                             wire = "LISTAR_PERGUNTAS;" + filtro;
                             break;
                         }
-                        case "9": { // Editar pergunta
+                        case "9": {
                             System.out.print("ID da pergunta: ");
                             String pid = sc.nextLine().trim();
                             System.out.print("Novo enunciado: ");
@@ -192,7 +192,7 @@ public class Main {
                             wire = "EDITAR_PERGUNTA;" + pid + ";" + enun + ";" + ini + ";" + fim;
                             break;
                         }
-                        case "10": { // Eliminar pergunta
+                        case "10": {
                             System.out.print("ID da pergunta a eliminar: ");
                             String pid = sc.nextLine().trim();
                             System.out.print("Tem a certeza? (S/N): ");
@@ -205,19 +205,19 @@ public class Main {
                             }
                             break;
                         }
-                        case "11": { // Ver resultados
+                        case "11": {
                             System.out.print("ID da pergunta expirada: ");
                             String pid = sc.nextLine().trim();
                             wire = "VER_RESULTADOS;" + pid;
                             break;
                         }
-                        case "12": { // Exportar CSV
+                        case "12": {
                             System.out.print("ID da pergunta a exportar: ");
                             String pid = sc.nextLine().trim();
                             wire = "EXPORTAR_CSV;" + pid;
                             break;
                         }
-                        case "13": { // Editar docente
+                        case "13": {
                             System.out.print("Novo nome: ");
                             String nome = sc.nextLine().trim();
                             System.out.print("Novo email: ");
@@ -227,14 +227,14 @@ public class Main {
                             wire = "EDITAR_DOCENTE;" + nome + ";" + email + ";" + pass;
                             break;
                         }
-                        case "14": { // Logout
+                        case "14": {
                             wire = "LOGOUT";
                             if (credenciais != null) {
                                 credenciais.autenticado = false;
                             }
                             break;
                         }
-                        case "15": { // Editar estudante
+                        case "15": {
                             System.out.print("Novo nome: ");
                             String nome = sc.nextLine().trim();
                             System.out.print("Novo email: ");
@@ -244,7 +244,7 @@ public class Main {
                             wire = "EDITAR_ESTUDANTE;" + nome + ";" + email + ";" + pass;
                             break;
                         }
-                        case "16": { // Listar respostas estudante
+                        case "16": {
                             wire = "LISTAR_RESPOSTAS_ESTUDANTE";
                             break;
                         }
@@ -346,7 +346,6 @@ public class Main {
             }
 
             System.out.println("[Cliente] ✓ Novo servidor principal obtido: " + novoIp + ":" + novoPorto);
-            // O loop principal tentará reconectar na próxima iteração
 
         } catch (Exception e) {
             System.err.println("[Cliente] ✗ Impossível obter servidor principal: " + e.getMessage());
